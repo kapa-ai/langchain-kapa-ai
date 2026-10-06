@@ -26,11 +26,17 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.tools import create_retriever_tool
 from pydantic import BaseModel, Field
 
-from langchain_kapa_ai import KapaGetDocumentsTool, KapaRetriever
+from langchain_kapa_ai import (
+    KapaDocument,
+    KapaDocumentsPage,
+    KapaGetDocumentsTool,
+    KapaRetriever,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS = ROOT / "evals" / "corpus"
 PACKAGES = ["langchain-kapa-ai", "langchain-core", "langchain"]
+MAX_GRADED_DOCUMENT_CHARS = 8_000
 URL_PATTERN = re.compile(r"https?://[^\s)\]>\"'`]+")
 
 ANSWER_INSTRUCTIONS = (
@@ -47,10 +53,12 @@ AGENT_INSTRUCTIONS = (
 )
 GRADER_INSTRUCTIONS = (
     "You grade answers from a retrieval-augmented assistant. You receive the "
-    "question, a reference answer, the passages the assistant retrieved, and the "
-    "assistant's answer. Judge correctness against the reference answer. Judge "
-    "support only against the retrieved passages, never against the reference. "
-    "For each passage, say whether it is relevant to the question. When the "
+    "question, a reference answer, the passages the assistant retrieved by search, "
+    "any whole documents it fetched, and the assistant's answer. Both the "
+    "passages and the fetched documents count as evidence. Judge correctness "
+    "against the reference answer. Judge support only against that evidence, "
+    "never against the reference. "
+    "For each retrieved passage, say whether it is relevant to the question. When the "
     "reference says the sources do not cover the question, the answer is correct "
     "only if it says so instead of inventing an answer."
 )
@@ -89,6 +97,7 @@ class Grading(BaseModel):
 @dataclass
 class Attempt:
     passages: list[Document]
+    documents: list[KapaDocument]
     answer: str
     tool_calls: list[dict[str, Any]]
     model_calls: int
@@ -186,6 +195,7 @@ def run_answer(case: Case, retriever: KapaRetriever, model: BaseChatModel) -> At
     )
     return Attempt(
         passages=passages,
+        documents=[],
         answer=response.text,
         tool_calls=[],
         model_calls=1,
@@ -221,6 +231,7 @@ def run_agent(
     messages: list[BaseMessage] = state["messages"]
 
     passages: list[Document] = []
+    documents: list[KapaDocument] = []
     tool_calls: list[dict[str, Any]] = []
     for message in messages:
         if isinstance(message, AIMessage):
@@ -230,15 +241,38 @@ def run_agent(
             ]
         if isinstance(message, ToolMessage) and message.name == search.name:
             passages += list(message.artifact or [])
+        if (
+            isinstance(message, ToolMessage)
+            and message.name == documents_tool.name
+            and isinstance(message.artifact, KapaDocumentsPage)
+        ):
+            documents += message.artifact.documents
     final = messages[-1]
     return Attempt(
         passages=passages,
+        documents=documents,
         answer=final.text if isinstance(final, AIMessage) else "",
         tool_calls=tool_calls,
         model_calls=sum(isinstance(message, AIMessage) for message in messages),
         retrieval_seconds=0.0,
         total_seconds=total_seconds,
     )
+
+
+def format_documents(documents: list[KapaDocument]) -> str:
+    sections = []
+    for number, document in enumerate(documents, start=1):
+        if document.content is None:
+            body = "(content unavailable)"
+        elif len(document.content) > MAX_GRADED_DOCUMENT_CHARS:
+            body = document.content[:MAX_GRADED_DOCUMENT_CHARS] + "\n(shortened)"
+        else:
+            body = document.content
+        sections.append(
+            f"[D{number}] Source: {document.source_url}\n"
+            f"Title: {document.title}\n{body}"
+        )
+    return "\n\n".join(sections) or "(none)"
 
 
 def grade(case: Case, attempt: Attempt, grader: BaseChatModel) -> Grading:
@@ -251,6 +285,7 @@ def grade(case: Case, attempt: Attempt, grader: BaseChatModel) -> Grading:
                 f"Question: {case.question}\n\n"
                 f"Reference answer: {case.reference_answer}\n\n"
                 f"Retrieved passages:\n\n{format_passages(attempt.passages)}\n\n"
+                f"Fetched documents:\n\n{format_documents(attempt.documents)}\n\n"
                 f"Assistant answer:\n{attempt.answer}",
             ),
         ]
@@ -414,6 +449,17 @@ def command_run(args: argparse.Namespace) -> None:
                                     "content": passage.page_content,
                                 }
                                 for passage in attempt.passages
+                            ],
+                            "fetched_documents": [
+                                {
+                                    "source_url": document.source_url,
+                                    "title": document.title,
+                                    "content_available": document.content_available,
+                                    "returned_chars": len(document.content or ""),
+                                    "total_chars": document.total_chars,
+                                    "truncated": document.truncated,
+                                }
+                                for document in attempt.documents
                             ],
                             "answer": attempt.answer,
                             "tool_calls": attempt.tool_calls,

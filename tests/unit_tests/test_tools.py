@@ -159,6 +159,18 @@ def test_requested_base_link_is_reused_for_fallback(kapa: FakeKapa) -> None:
     assert requested_urls(kapa) == [urls]
 
 
+def test_results_follow_link_groups_in_first_appearance_order(kapa: FakeKapa) -> None:
+    urls = ["https://d.test/guide#a", CODE.source_url, "https://d.test/guide#b"]
+
+    page = lookup(make_tool(kapa), urls=urls)
+
+    assert [result.requested_url for result in page.results] == [
+        "https://d.test/guide#a",
+        "https://d.test/guide#b",
+        CODE.source_url,
+    ]
+
+
 def test_document_ids_are_deduplicated_case_insensitively(kapa: FakeKapa) -> None:
     upper = CODE.document_id.upper()
     missing = "77777777-7777-7777-7777-777777777777"

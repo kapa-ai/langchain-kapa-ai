@@ -68,7 +68,7 @@ def test_every_citation_resolves_to_a_document(
         document.document_id: document for page in pages for document in page.documents
     }
 
-    assert [result.requested_url for result in results] == links
+    assert Counter(result.requested_url for result in results) == Counter(links)
     missing = [
         f"{result.requested_url} (from {citations[result.requested_url or '']!r})"
         for result in results
