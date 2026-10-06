@@ -1,3 +1,12 @@
+"""Run an agent that searches the knowledge base and reads whole documents.
+
+Works with any chat model that supports tool calling. Install that provider's
+LangChain package, set its API key, and name the model in LangChain's
+provider:model form:
+
+    export KAPA_EXAMPLE_MODEL="<provider>:<model>"
+"""
+
 import os
 import sys
 
@@ -8,6 +17,14 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.tools import create_retriever_tool
 
 from langchain_kapa_ai import KapaGetDocumentsTool, KapaRetriever
+
+MODEL = os.environ.get("KAPA_EXAMPLE_MODEL", "")
+if ":" not in MODEL:
+    sys.exit(
+        "Set KAPA_EXAMPLE_MODEL to a chat model that supports tool calling, in "
+        "LangChain's \"<provider>:<model>\" form, and install that provider's "
+        "LangChain package."
+    )
 
 SYSTEM_PROMPT = (
     "You answer questions from the knowledge base. Search before you answer. "
@@ -28,10 +45,7 @@ search_tool = create_retriever_tool(
 )
 
 graph = create_agent(
-    init_chat_model(
-        os.environ.get("KAPA_EXAMPLE_MODEL", "gpt-5.1"),
-        model_provider=os.environ.get("KAPA_EXAMPLE_MODEL_PROVIDER", "openai"),
-    ),
+    init_chat_model(MODEL),
     tools=[search_tool, KapaGetDocumentsTool()],
     system_prompt=SYSTEM_PROMPT,
 )

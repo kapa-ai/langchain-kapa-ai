@@ -50,7 +50,6 @@ lint = ["ruff>=0.16.10,<0.17"]
 typing = ["mypy>=2.4.0,<3"]
 examples = [
     "langchain>=1.4.3,<2",
-    "langchain-openai>=1.6.7,<2",
     "langgraph-cli[inmem]>=0.4.32,<0.5",
 ]
 dev = [

@@ -27,12 +27,16 @@ Develop against `dev.jsonl`. The `heldout.jsonl` sets stay untouched until you r
 
 ## Running
 
+The runner works with any chat model that supports tool calling, for example from OpenAI or Anthropic. Install that provider's LangChain package with `uv pip install`, set its API key, and name the models in LangChain's `provider:model` form: `KAPA_EXAMPLE_MODEL` for the model that answers and `KAPA_EVAL_GRADER_MODEL` for the grader, or `--model` and `--grader-model`. There is no default; the runner stops before any request when either is missing.
+
 ```bash
-export KAPA_API_KEY="..." KAPA_PROJECT_ID="..." OPENAI_API_KEY="..."
+export KAPA_API_KEY="..." KAPA_PROJECT_ID="..."
+export KAPA_EXAMPLE_MODEL="<provider>:<model>"
+export KAPA_EVAL_GRADER_MODEL="<provider>:<model>"
 make eval ARGS="run --dataset evals/datasets/fictional/dev.jsonl --repeats 3"
 ```
 
-The runner compares the `default` and `deep` modes with every other setting held fixed. Use `--system agent` to evaluate the agent, which chooses its own searches and document lookups, instead of the fixed pipeline. Use `--project-id` when the datasets of one run live in different projects. The answer model and grader default to OpenAI `gpt-5.1`; change them with `--model`, `--model-provider`, `--grader-model`, and `--grader-model-provider`.
+The runner compares the `default` and `deep` modes with every other setting held fixed. Use `--system agent` to evaluate the agent, which chooses its own searches and document lookups, instead of the fixed pipeline. Use `--project-id` when the datasets of one run live in different projects.
 
 Each run writes a folder under `results/` (not committed) with `run.json` (package versions, corpus revision, dataset hashes, and model settings), `cases.jsonl` (retrieved passages, answer, tool calls, latency, call counts, and grades per case), and `summary.json` (results per mode).
 

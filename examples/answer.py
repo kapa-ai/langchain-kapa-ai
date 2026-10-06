@@ -1,3 +1,12 @@
+"""Answer a question from retrieved passages with a fixed pipeline.
+
+Works with any chat model that supports tool calling. Install that provider's
+LangChain package, set its API key, and name the model in LangChain's
+provider:model form:
+
+    export KAPA_EXAMPLE_MODEL="<provider>:<model>"
+"""
+
 import os
 import sys
 
@@ -5,6 +14,14 @@ from langchain.chat_models import init_chat_model
 from langchain_core.documents import Document
 
 from langchain_kapa_ai import KapaRetriever
+
+MODEL = os.environ.get("KAPA_EXAMPLE_MODEL", "")
+if ":" not in MODEL:
+    sys.exit(
+        "Set KAPA_EXAMPLE_MODEL to a chat model that supports tool calling, in "
+        "LangChain's \"<provider>:<model>\" form, and install that provider's "
+        "LangChain package."
+    )
 
 INSTRUCTIONS = (
     "Answer the question using only the numbered passages. Cite the passages you "
@@ -22,10 +39,7 @@ def format_evidence(documents: list[Document]) -> str:
 
 def main() -> None:
     question = " ".join(sys.argv[1:]) or "How do I get started?"
-    model = init_chat_model(
-        os.environ.get("KAPA_EXAMPLE_MODEL", "gpt-5.1"),
-        model_provider=os.environ.get("KAPA_EXAMPLE_MODEL_PROVIDER", "openai"),
-    )
+    model = init_chat_model(MODEL)
 
     documents = KapaRetriever().invoke(question)
     evidence = format_evidence(documents)

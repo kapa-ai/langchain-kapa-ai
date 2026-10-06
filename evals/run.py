@@ -30,7 +30,7 @@ from langchain_kapa_ai import KapaGetDocumentsTool, KapaRetriever
 
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS = ROOT / "evals" / "corpus"
-PACKAGES = ["langchain-kapa-ai", "langchain-core", "langchain", "langchain-openai"]
+PACKAGES = ["langchain-kapa-ai", "langchain-core", "langchain"]
 URL_PATTERN = re.compile(r"https?://[^\s)\]>\"'`]+")
 
 ANSWER_INSTRUCTIONS = (
@@ -138,10 +138,35 @@ def format_passages(passages: list[Document]) -> str:
     )
 
 
-def make_model(model: str, provider: str) -> BaseChatModel:
-    chat_model = init_chat_model(model, model_provider=provider)
+def require_model(value: str | None, variable: str, flag: str) -> str:
+    if not value or ":" not in value:
+        sys.exit(
+            f"Set {variable} or pass {flag} with a chat model that supports tool "
+            'calling, in LangChain\'s "<provider>:<model>" form, and install that '
+            "provider's LangChain package."
+        )
+    return value
+
+
+def model_settings(spec: str) -> dict[str, str | None]:
+    provider, name = spec.split(":", 1)
+    package = f"langchain-{provider.replace('_', '-')}"
+    try:
+        package_version: str | None = version(package)
+    except PackageNotFoundError:
+        package_version = None
+    return {
+        "provider": provider,
+        "name": name,
+        "package": package,
+        "package_version": package_version,
+    }
+
+
+def make_model(spec: str) -> BaseChatModel:
+    chat_model = init_chat_model(spec)
     if not isinstance(chat_model, BaseChatModel):
-        raise TypeError(f"{provider}:{model} is not a chat model.")
+        raise TypeError(f"{spec} is not a chat model.")
     return chat_model
 
 
@@ -334,8 +359,12 @@ def command_run(args: argparse.Namespace) -> None:
         if "heldout" in dataset.stem and not args.allow_heldout:
             sys.exit(f"{dataset} is a held-out set; pass --allow-heldout to use it.")
 
-    model = make_model(args.model, args.model_provider)
-    grader = make_model(args.grader_model, args.grader_model_provider)
+    model_spec = require_model(args.model, "KAPA_EXAMPLE_MODEL", "--model")
+    grader_spec = require_model(
+        args.grader_model, "KAPA_EVAL_GRADER_MODEL", "--grader-model"
+    )
+    model = make_model(model_spec)
+    grader = make_model(grader_spec)
     project = {"project_id": args.project_id} if args.project_id else {}
 
     output = Path(args.output) / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -347,8 +376,8 @@ def command_run(args: argparse.Namespace) -> None:
         "top_k": args.top_k,
         "max_chars": args.max_chars,
         "repeats": args.repeats,
-        "model": {"provider": args.model_provider, "name": args.model},
-        "grader": {"provider": args.grader_model_provider, "name": args.grader_model},
+        "model": model_settings(model_spec),
+        "grader": model_settings(grader_spec),
         "packages": package_versions(),
         "repository_commit": git("rev-parse", "HEAD"),
         "corpus_revision": git("rev-parse", "HEAD:evals/corpus"),
@@ -455,13 +484,8 @@ def main() -> None:
     run.add_argument("--max-chars", type=int, default=None)
     run.add_argument("--repeats", type=int, default=1)
     run.add_argument("--project-id", default=None)
-    run.add_argument("--model", default=os.environ.get("KAPA_EXAMPLE_MODEL", "gpt-5.1"))
-    run.add_argument(
-        "--model-provider",
-        default=os.environ.get("KAPA_EXAMPLE_MODEL_PROVIDER", "openai"),
-    )
-    run.add_argument("--grader-model", default="gpt-5.1")
-    run.add_argument("--grader-model-provider", default="openai")
+    run.add_argument("--model", default=os.environ.get("KAPA_EXAMPLE_MODEL"))
+    run.add_argument("--grader-model", default=os.environ.get("KAPA_EVAL_GRADER_MODEL"))
     run.add_argument("--allow-heldout", action="store_true")
     run.add_argument("--output", default=str(ROOT / "evals" / "results"))
     run.set_defaults(handler=command_run)

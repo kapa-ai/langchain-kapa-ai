@@ -29,9 +29,13 @@ def test_retrieve_prints_sources() -> None:
     assert "[1] " in run_example("retrieve.py")
 
 
-@pytest.mark.skipif(
-    not os.environ.get("OPENAI_API_KEY"), reason="Set OPENAI_API_KEY to run."
+requires_model = pytest.mark.skipif(
+    not os.environ.get("KAPA_EXAMPLE_MODEL"),
+    reason='Set KAPA_EXAMPLE_MODEL to "<provider>:<model>" to run.',
 )
+
+
+@requires_model
 def test_answer_prints_evidence_and_answer() -> None:
     output = run_example("answer.py")
 
@@ -39,8 +43,6 @@ def test_answer_prints_evidence_and_answer() -> None:
     assert "Answer" in output
 
 
-@pytest.mark.skipif(
-    not os.environ.get("OPENAI_API_KEY"), reason="Set OPENAI_API_KEY to run."
-)
+@requires_model
 def test_agent_shows_its_searches() -> None:
     assert "search_knowledge_base" in run_example("agent.py")

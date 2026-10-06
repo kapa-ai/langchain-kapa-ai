@@ -36,6 +36,12 @@ The [quickstart](https://docs.kapa.ai/frameworks/langchain/quickstart) attaches 
 - [`examples/`](examples/): search without a model, a fixed question-to-answer pipeline, and an agent that searches and follows citations into whole documents.
 - [`evals/`](evals/): a fictional product corpus with questions and reference answers, and a runner that measures retrieval and answer quality.
 
+The examples and evaluations work with any chat model that supports tool calling, for example from OpenAI or Anthropic. Install that provider's LangChain package, set its API key, and name the model in LangChain's `provider:model` form:
+
+```bash
+export KAPA_EXAMPLE_MODEL="<provider>:<model>"
+```
+
 ## Development
 
 The repository uses [uv](https://docs.astral.sh/uv/).
