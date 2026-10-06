@@ -1,0 +1,6 @@
+{
+  "dependencies": [".."],
+  "graphs": {
+    "kapa_agent": "./agent.py:graph"
+  }
+}
