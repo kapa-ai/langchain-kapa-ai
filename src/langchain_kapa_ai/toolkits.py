@@ -9,7 +9,7 @@ from langchain_kapa_ai._client import KapaSettings
 from langchain_kapa_ai.retrievers import KapaRetrievalSettings, KapaRetriever
 from langchain_kapa_ai.tools import KapaDocumentSettings, KapaGetDocumentsTool
 
-SEARCH_TOOL_NAME = "search_knowledge_base"
+SEARCH_TOOL_NAME = "kapa_search_knowledge_base"
 SEARCH_TOOL_DESCRIPTION = (
     "Search the project's knowledge base. Returns relevant passages, each with its "
     "source link."

@@ -22,21 +22,18 @@ from langchain.chat_models import init_chat_model
 from langchain_core.documents import Document
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
-from langchain_core.prompts import PromptTemplate
-from langchain_core.tools import create_retriever_tool
 from pydantic import BaseModel, Field
 
 from langchain_kapa_ai import (
     KapaDocument,
     KapaDocumentsPage,
-    KapaGetDocumentsTool,
     KapaRetriever,
+    KapaToolkit,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS = ROOT / "evals" / "corpus"
 PACKAGES = ["langchain-kapa-ai", "langchain-core", "langchain"]
-MAX_GRADED_DOCUMENT_CHARS = 8_000
 URL_PATTERN = re.compile(r"https?://[^\s)\]>\"'`]+")
 
 ANSWER_INSTRUCTIONS = (
@@ -204,24 +201,8 @@ def run_answer(case: Case, retriever: KapaRetriever, model: BaseChatModel) -> At
     )
 
 
-def run_agent(
-    case: Case,
-    retriever: KapaRetriever,
-    documents_tool: KapaGetDocumentsTool,
-    model: BaseChatModel,
-) -> Attempt:
-    search = create_retriever_tool(
-        retriever,
-        name="search_knowledge_base",
-        description=(
-            "Search the knowledge base. Returns relevant passages, each with its "
-            "source link."
-        ),
-        document_prompt=PromptTemplate.from_template(
-            "Source: {source}\n{page_content}"
-        ),
-        response_format="content_and_artifact",
-    )
+def run_agent(case: Case, toolkit: KapaToolkit, model: BaseChatModel) -> Attempt:
+    search, documents_tool = toolkit.get_tools()
     agent = create_agent(
         model, tools=[search, documents_tool], system_prompt=AGENT_INSTRUCTIONS
     )
@@ -262,12 +243,7 @@ def run_agent(
 def format_documents(documents: list[KapaDocument]) -> str:
     sections = []
     for number, document in enumerate(documents, start=1):
-        if document.content is None:
-            body = "(content unavailable)"
-        elif len(document.content) > MAX_GRADED_DOCUMENT_CHARS:
-            body = document.content[:MAX_GRADED_DOCUMENT_CHARS] + "\n(shortened)"
-        else:
-            body = document.content
+        body = "(content unavailable)" if document.content is None else document.content
         sections.append(
             f"[D{number}] Source: {document.source_url}\n"
             f"Title: {document.title}\n{body}"
@@ -427,14 +403,17 @@ def command_run(args: argparse.Namespace) -> None:
         for dataset in datasets:
             for case in load_cases(dataset):
                 for mode in args.modes:
-                    retriever = KapaRetriever(
-                        **project, mode=mode, top_k=args.top_k, max_chars=args.max_chars
-                    )
+                    search = {
+                        "mode": mode,
+                        "top_k": args.top_k,
+                        "max_chars": args.max_chars,
+                    }
                     for repeat in range(1, args.repeats + 1):
                         if args.system == "agent":
-                            documents_tool = KapaGetDocumentsTool(**project)
-                            attempt = run_agent(case, retriever, documents_tool, model)
+                            toolkit = KapaToolkit(**project, **search)
+                            attempt = run_agent(case, toolkit, model)
                         else:
+                            retriever = KapaRetriever(**project, **search)
                             attempt = run_answer(case, retriever, model)
                         row = {
                             "dataset": str(dataset),

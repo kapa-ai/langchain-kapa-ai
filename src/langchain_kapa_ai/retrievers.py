@@ -55,8 +55,11 @@ class KapaRetrievalSettings(BaseModel):
         ge=1,
         description="Maximum characters across all passages; Kapa's default if unset.",
     )
-    source_group_ids: list[str] | None = None
-    """Source groups to restrict retrieval to; all sources when unset."""
+    source_group_ids: list[str] | None = Field(
+        default=None,
+        min_length=1,
+        description="Source groups to restrict retrieval to; all sources when unset.",
+    )
     integration_id: str | None = None
     """Integration that analytics attributes queries to."""
     redact_query: bool = False

@@ -31,7 +31,7 @@ def test_returns_search_and_document_tools_in_order(kapa: FakeKapa) -> None:
     tools = KapaToolkit(**kapa.settings()).get_tools()
 
     assert [tool.name for tool in tools] == [
-        "search_knowledge_base",
+        "kapa_search_knowledge_base",
         "kapa_get_documents",
     ]
     assert isinstance(tools[1], KapaGetDocumentsTool)

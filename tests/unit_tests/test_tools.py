@@ -24,6 +24,9 @@ PDF = StoredDocument(
     "33333333-3333-3333-3333-333333333333", "https://d.test/manual.pdf", content=None
 )
 UPLOAD = StoredDocument("44444444-4444-4444-4444-444444444444", "https://d.test/hb#v2")
+UPLOAD_V3 = StoredDocument(
+    "88888888-8888-8888-8888-888888888888", "https://d.test/hb#v3"
+)
 EMPTY = StoredDocument(
     "55555555-5555-5555-5555-555555555555", "https://d.test/empty", content=""
 )
@@ -34,7 +37,7 @@ LONG = StoredDocument(
     total_chars=10_000,
     truncated=True,
 )
-ALL = [GUIDE, CODE, PDF, UPLOAD, EMPTY, LONG]
+ALL = [GUIDE, CODE, PDF, UPLOAD, UPLOAD_V3, EMPTY, LONG]
 
 
 def make_tool(kapa: FakeKapa, **settings: Any) -> KapaGetDocumentsTool:
@@ -143,7 +146,7 @@ def test_citations_into_one_document_fetch_it_once(kapa: FakeKapa) -> None:
 
     assert [r.status for r in page.results] == ["found", "found"]
     assert [d.document_id for d in page.documents] == [GUIDE.document_id]
-    assert page.total_requested == 1
+    assert page.total_requested == 2
     assert requested_urls(kapa) == [citations, [GUIDE.source_url]]
 
 
@@ -159,15 +162,15 @@ def test_requested_base_link_is_reused_for_fallback(kapa: FakeKapa) -> None:
     assert requested_urls(kapa) == [urls]
 
 
-def test_results_follow_link_groups_in_first_appearance_order(kapa: FakeKapa) -> None:
+def test_results_follow_request_order(kapa: FakeKapa) -> None:
     urls = ["https://d.test/guide#a", CODE.source_url, "https://d.test/guide#b"]
 
     page = lookup(make_tool(kapa), urls=urls)
 
     assert [result.requested_url for result in page.results] == [
         "https://d.test/guide#a",
-        "https://d.test/guide#b",
         CODE.source_url,
+        "https://d.test/guide#b",
     ]
 
 
@@ -202,7 +205,7 @@ def test_urls_and_ids_are_requested_separately(kapa: FakeKapa) -> None:
 def test_backend_requests_stay_within_page_limit(kapa: FakeKapa) -> None:
     urls = [f"https://d.test/guide#s{i}" for i in range(7)]
 
-    page = lookup(make_tool(kapa), urls=urls)
+    page = lookup(make_tool(kapa, page_size=7), urls=urls)
 
     assert all(r.status == "found" for r in page.results)
     assert requested_urls(kapa) == [urls[:5], urls[5:], [GUIDE.source_url]]
@@ -240,14 +243,27 @@ def test_pages_follow_requested_items_not_matches(kapa: FakeKapa) -> None:
     assert (third.results, third.has_more) == ([], False)
 
 
-def test_grouped_links_count_as_one_requested_item(kapa: FakeKapa) -> None:
+def test_each_distinct_link_is_one_requested_item(kapa: FakeKapa) -> None:
     urls = ["https://d.test/guide#a", "https://d.test/guide#b", CODE.source_url]
 
     page = lookup(make_tool(kapa, page_size=1), urls=urls)
 
-    assert page.total_requested == 2
-    assert [r.requested_url for r in page.results] == urls[:2]
+    assert page.total_requested == 3
+    assert [r.requested_url for r in page.results] == urls[:1]
     assert page.has_more
+
+
+def test_page_returns_at_most_page_size_documents(kapa: FakeKapa) -> None:
+    urls = [UPLOAD.source_url, UPLOAD_V3.source_url]
+    tool = make_tool(kapa, page_size=1)
+
+    first = lookup(tool, urls=urls)
+    second = lookup(tool, urls=urls, page=2)
+
+    assert [d.document_id for d in first.documents] == [UPLOAD.document_id]
+    assert (first.total_requested, first.has_more) == (2, True)
+    assert [d.document_id for d in second.documents] == [UPLOAD_V3.document_id]
+    assert not second.has_more
 
 
 def test_document_fields_distinguish_unavailable_empty_and_truncated(

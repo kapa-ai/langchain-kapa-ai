@@ -5,6 +5,7 @@ from typing import Any
 import httpx
 import pytest
 from langchain_core.documents import Document
+from pydantic import ValidationError
 
 from langchain_kapa_ai import KapaEndUser, KapaResponseError, KapaRetriever
 from tests.unit_tests.fake_kapa import FakeKapa
@@ -61,10 +62,9 @@ def test_full_request_body(kapa: FakeKapa) -> None:
     ]
 
 
-def test_empty_source_group_list_is_sent(kapa: FakeKapa) -> None:
-    KapaRetriever(**kapa.settings(), source_group_ids=[]).invoke("question")
-
-    assert kapa.bodies[0]["source_group_ids_include"] == []
+def test_empty_source_group_list_is_rejected(kapa: FakeKapa) -> None:
+    with pytest.raises(ValidationError, match="source_group_ids"):
+        KapaRetriever(**kapa.settings(), source_group_ids=[])
 
 
 def test_per_call_settings_override_configuration(kapa: FakeKapa) -> None:

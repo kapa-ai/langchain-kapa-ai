@@ -29,7 +29,7 @@ class KapaAuthenticationError(KapaAPIError):
 
 
 class KapaNotFoundError(KapaAPIError):
-    """The project does not exist for this API key."""
+    """The project, or the configured integration, does not exist for this API key."""
 
 
 class KapaValidationError(KapaAPIError):
