@@ -65,35 +65,55 @@ class KapaDocument(BaseModel):
     """A document returned by the Kapa document tool."""
 
     document_id: str
+    """Kapa document ID."""
     source_url: str | None
+    """Stored link of the document; None when it has no link."""
     title: str
+    """Title of the document."""
     content: str | None
+    """Markdown content, possibly truncated; None when the text is unavailable."""
     content_available: bool
+    """Whether the document text is available."""
     total_chars: int
+    """Length of the full document before truncation."""
     truncated: bool
+    """Whether the content was shortened to the per-document limit."""
 
 
 class KapaDocumentRequestResult(BaseModel):
     """The outcome of one requested link or document ID."""
 
     requested_url: str | None = None
+    """Link as requested, when the item is a link."""
     requested_document_id: str | None = None
+    """Document ID as requested, when the item is an ID."""
     status: Literal["found", "not_found"]
+    """Whether a document was found."""
     match: Literal["exact", "fragment_removed", "document_id"] | None = None
+    """How the document was matched."""
     matched_url: str | None = None
+    """Stored link that matched, for link requests."""
     document_id: str | None = None
+    """ID of the document found."""
 
 
 class KapaDocumentsPage(BaseModel):
     """One page of a Kapa document lookup."""
 
     page: int
+    """The returned page, starting at 1."""
     page_size: int
+    """Maximum number of requested items per page."""
     total_requested: int
+    """Number of requested items after deduplication."""
     has_more: bool
+    """Whether another page of requested items exists."""
     next_page: int | None
+    """Number of the next page; None on the last page."""
     results: list[KapaDocumentRequestResult]
+    """Outcome of each requested link or ID on this page."""
     documents: list[KapaDocument]
+    """Each document found on this page, once."""
 
 
 class _DocumentResult(BaseModel):
@@ -288,7 +308,22 @@ def _assemble(
     )
 
 
-class KapaGetDocumentsTool(KapaSettings, BaseTool):
+class KapaDocumentSettings(BaseModel):
+    """Document lookup settings shared by the Kapa document tool and toolkit."""
+
+    source_group_ids: list[str] | None = None
+    """Source groups to restrict the lookup to; all sources when unset."""
+    max_chars_per_document: int | None = Field(
+        default=None,
+        ge=1,
+        description="Maximum characters per document; Kapa's default if unset.",
+    )
+    page_size: int = Field(
+        default=5, ge=1, description="Number of requested items per page."
+    )
+
+
+class KapaGetDocumentsTool(KapaSettings, KapaDocumentSettings, BaseTool):
     """Fetch whole documents from a Kapa knowledge base by link or document ID.
 
     Links are looked up exactly as given first. Only a link that matches nothing
@@ -297,12 +332,13 @@ class KapaGetDocumentsTool(KapaSettings, BaseTool):
     """
 
     name: str = "kapa_get_documents"
+    """Tool name shown to the model."""
     description: str = _DESCRIPTION
+    """Tool description shown to the model."""
     args_schema: ArgsSchema | None = KapaGetDocumentsInput
+    """Schema of the arguments the model passes."""
     response_format: Literal["content", "content_and_artifact"] = "content_and_artifact"
-    source_group_ids: list[str] | None = None
-    max_chars_per_document: int | None = Field(default=None, ge=1)
-    page_size: int = Field(default=5, ge=1)
+    """Returns JSON text for the model and a `KapaDocumentsPage` artifact."""
 
     def _request_body(self, key: str, values: list[Any]) -> dict[str, Any]:
         body: dict[str, Any] = {

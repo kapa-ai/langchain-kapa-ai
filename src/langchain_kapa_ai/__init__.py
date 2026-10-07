@@ -12,6 +12,7 @@ from langchain_kapa_ai.exceptions import (
     KapaValidationError,
 )
 from langchain_kapa_ai.retrievers import KapaEndUser, KapaRetriever
+from langchain_kapa_ai.toolkits import KapaToolkit
 from langchain_kapa_ai.tools import (
     KapaDocument,
     KapaDocumentRequestResult,
@@ -38,6 +39,7 @@ __all__ = [
     "KapaResponseError",
     "KapaRetriever",
     "KapaServiceError",
+    "KapaToolkit",
     "KapaValidationError",
     "__version__",
 ]

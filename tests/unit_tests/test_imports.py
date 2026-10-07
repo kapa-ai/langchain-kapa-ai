@@ -16,6 +16,7 @@ EXPECTED_ALL = {
     "KapaResponseError",
     "KapaRetriever",
     "KapaServiceError",
+    "KapaToolkit",
     "KapaValidationError",
     "__version__",
 }

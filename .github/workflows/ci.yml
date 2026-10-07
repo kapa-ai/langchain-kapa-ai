@@ -20,6 +20,7 @@ jobs:
       - run: make format-check
       - run: make lint
       - run: make typecheck
+      - run: uv run pytest tests/integration_tests --collect-only -q
 
   test:
     runs-on: ubuntu-latest

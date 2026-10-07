@@ -5,7 +5,7 @@ build-backend = "uv_build"
 [project]
 name = "langchain-kapa-ai"
 version = "0.1.0"
-description = "LangChain retriever and document tool for the Kapa.ai knowledge base."
+description = "LangChain retriever, document tool, and toolkit for the Kapa.ai knowledge base."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

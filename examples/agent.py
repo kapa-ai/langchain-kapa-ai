@@ -7,16 +7,16 @@ provider:model form:
     export KAPA_EXAMPLE_MODEL="<provider>:<model>"
 """
 
+import json
 import os
 import sys
 
 from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
-from langchain_core.messages import HumanMessage
-from langchain_core.prompts import PromptTemplate
-from langchain_core.tools import create_retriever_tool
+from langchain_core.documents import Document
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 
-from langchain_kapa_ai import KapaGetDocumentsTool, KapaRetriever
+from langchain_kapa_ai import KapaDocumentsPage, KapaToolkit
 
 MODEL = os.environ.get("KAPA_EXAMPLE_MODEL", "")
 if ":" not in MODEL:
@@ -34,31 +34,88 @@ SYSTEM_PROMPT = (
     "If the knowledge base does not answer the question, say so."
 )
 
-search_tool = create_retriever_tool(
-    KapaRetriever(),
-    name="search_knowledge_base",
-    description=(
-        "Search the knowledge base. Returns relevant passages, each with its "
-        "source link."
-    ),
-    document_prompt=PromptTemplate.from_template("Source: {source}\n{page_content}"),
-)
+search_tool, documents_tool = KapaToolkit().get_tools()
 
 graph = create_agent(
     init_chat_model(MODEL),
-    tools=[search_tool, KapaGetDocumentsTool()],
+    tools=[search_tool, documents_tool],
     system_prompt=SYSTEM_PROMPT,
 )
 
 
+def snippet(text: str, limit: int = 160) -> str:
+    flat = " ".join(text.split())
+    sentence_end = flat.find(". ")
+    if 0 <= sentence_end < limit:
+        return flat[: sentence_end + 1]
+    return flat if len(flat) <= limit else flat[:limit].rstrip() + "..."
+
+
+def show_search_results(message: ToolMessage) -> None:
+    passages = message.artifact
+    if not isinstance(passages, list):
+        print(f"  {snippet(message.text, 300)}")
+        return
+    if not passages:
+        print("  (no passages)")
+    for number, passage in enumerate(passages, start=1):
+        if isinstance(passage, Document):
+            source = passage.metadata["source"] or "(no link)"
+            print(f"  [{number}] {source}")
+            print(f"      {snippet(passage.page_content)}")
+
+
+def show_documents(message: ToolMessage) -> None:
+    page = message.artifact
+    if not isinstance(page, KapaDocumentsPage):
+        print(f"  {snippet(message.text, 300)}")
+        return
+    lengths = {
+        document.document_id: (
+            f"{len(document.content):,} chars"
+            if document.content is not None
+            else "content unavailable"
+        )
+        for document in page.documents
+    }
+    for result in page.results:
+        requested = result.requested_url or result.requested_document_id
+        if result.status == "not_found":
+            print(f"  {requested}: not found")
+            continue
+        length = lengths.get(result.document_id or "", "")
+        print(f"  {requested}: found by {result.match}, {result.matched_url}, {length}")
+    if page.has_more:
+        print(f"  more requested items on page {page.next_page}")
+
+
+def show(message: BaseMessage) -> None:
+    if isinstance(message, AIMessage):
+        if message.tool_calls:
+            if message.text.strip():
+                print(f"\n{message.text.strip()}")
+            for call in message.tool_calls:
+                print(f"\nTool call: {call['name']} {json.dumps(call['args'])}")
+        else:
+            print(f"\nAnswer\n------\n{message.text}")
+    elif isinstance(message, ToolMessage):
+        if message.name == search_tool.name:
+            print("Search results:")
+            show_search_results(message)
+        else:
+            print("Documents:")
+            show_documents(message)
+
+
 def main() -> None:
     question = " ".join(sys.argv[1:]) or "How do I get started?"
+    print(f"Question: {question}")
     for update in graph.stream(
         {"messages": [HumanMessage(question)]}, stream_mode="updates"
     ):
         for step in update.values():
             for message in step["messages"]:
-                message.pretty_print()
+                show(message)
 
 
 if __name__ == "__main__":

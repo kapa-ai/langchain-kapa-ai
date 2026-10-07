@@ -1,4 +1,4 @@
-.PHONY: format format-check lint typecheck test test-min-deps integration-test build check-wheel eval studio
+.PHONY: format format-check lint typecheck test test-min-deps integration-test integration_test integration_tests build check-wheel eval studio
 
 PYTEST_OFFLINE := --disable-socket --allow-unix-socket
 MIN_PYTHON := 3.10
@@ -27,7 +27,7 @@ test-min-deps:
 	uv pip install --quiet --python $(MIN_DEPS_VENV) --resolution lowest-direct --group test -e .
 	$(MIN_DEPS_VENV)/bin/python -m pytest $(PYTEST_OFFLINE) tests/unit_tests
 
-integration-test:
+integration-test integration_test integration_tests:
 	uv run pytest tests/integration_tests
 
 build:

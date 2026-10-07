@@ -39,7 +39,8 @@ class KapaSettings(BaseModel):
             error_message=(
                 "Pass `api_key` or set the KAPA_API_KEY environment variable."
             ),
-        )
+        ),
+        description="Project API key; read from KAPA_API_KEY when not passed.",
     )
     project_id: str = Field(
         default_factory=from_env(
@@ -49,12 +50,26 @@ class KapaSettings(BaseModel):
             ),
         ),
         min_length=1,
+        description="Kapa project to query; read from KAPA_PROJECT_ID when not passed.",
     )
     base_url: str = DEFAULT_BASE_URL
-    timeout: float = Field(default=DEFAULT_TIMEOUT, gt=0)
-    http_client: httpx.Client | None = Field(default=None, exclude=True, repr=False)
+    """Base URL of the Kapa API."""
+    timeout: float = Field(
+        default=DEFAULT_TIMEOUT,
+        gt=0,
+        description="Timeout in seconds for each request.",
+    )
+    http_client: httpx.Client | None = Field(
+        default=None,
+        exclude=True,
+        repr=False,
+        description="Client for synchronous requests; one per call when unset.",
+    )
     http_async_client: httpx.AsyncClient | None = Field(
-        default=None, exclude=True, repr=False
+        default=None,
+        exclude=True,
+        repr=False,
+        description="Client for asynchronous requests; one per call when unset.",
     )
 
     def _kapa_client(self) -> KapaClient:

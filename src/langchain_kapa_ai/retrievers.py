@@ -22,8 +22,11 @@ class KapaEndUser(BaseModel):
     """End user attributed to retrieval queries in Kapa analytics."""
 
     email: str | None = None
+    """Email address of the end user."""
     unique_client_id: str | None = None
+    """Identifier of the end user in your application."""
     metadata: dict[str, Any] | None = None
+    """Additional attributes of the end user."""
 
 
 class _SearchSettings(BaseModel):
@@ -37,20 +40,37 @@ class _RetrievedChunk(BaseModel):
     content: str
 
 
-class KapaRetriever(KapaSettings, BaseRetriever):
+class KapaRetrievalSettings(BaseModel):
+    """Search settings shared by the Kapa retriever and toolkit."""
+
+    mode: RetrievalMode = "default"
+    """Retrieval mode: the faster `default` or the more thorough `deep`."""
+    top_k: int | None = Field(
+        default=None,
+        ge=1,
+        description="Maximum number of passages; Kapa's default applies when unset.",
+    )
+    max_chars: int | None = Field(
+        default=None,
+        ge=1,
+        description="Maximum characters across all passages; Kapa's default if unset.",
+    )
+    source_group_ids: list[str] | None = None
+    """Source groups to restrict retrieval to; all sources when unset."""
+    integration_id: str | None = None
+    """Integration that analytics attributes queries to."""
+    redact_query: bool = False
+    """Whether to redact the query in analytics."""
+    end_user: KapaEndUser | None = None
+    """End user that analytics attributes queries to."""
+
+
+class KapaRetriever(KapaSettings, KapaRetrievalSettings, BaseRetriever):
     """Retrieve relevant passages from a Kapa knowledge base.
 
     Each document's `page_content` is the passage text and `metadata["source"]`
     is its citation link, unchanged from Kapa.
     """
-
-    mode: RetrievalMode = "default"
-    top_k: int | None = Field(default=None, ge=1)
-    max_chars: int | None = Field(default=None, ge=1)
-    source_group_ids: list[str] | None = None
-    integration_id: str | None = None
-    redact_query: bool = False
-    end_user: KapaEndUser | None = None
 
     def _get_relevant_documents(
         self,
