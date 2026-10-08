@@ -33,8 +33,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://docs.kapa.ai/frameworks/langchain/"
-Documentation = "https://docs.kapa.ai/frameworks/langchain/reference"
+Homepage = "https://docs.kapa.ai/retrieval/frameworks/langchain"
+Documentation = "https://docs.kapa.ai/retrieval/frameworks/langchain"
 Repository = "https://github.com/kapa-ai/langchain-kapa-ai"
 Issues = "https://github.com/kapa-ai/langchain-kapa-ai/issues"
 Changelog = "https://github.com/kapa-ai/langchain-kapa-ai/blob/main/CHANGELOG.md"

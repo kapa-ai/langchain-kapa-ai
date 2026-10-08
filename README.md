@@ -17,7 +17,7 @@ pip install langchain-kapa-ai
 
 ## Usage
 
-Create an API key for your project in the [Kapa platform](https://app.kapa.ai), then set it and the project ID:
+The package searches a Kapa project that already has knowledge sources indexed; [Index your first source](https://docs.kapa.ai/getting-started/index-your-first-source) sets one up. Create an API key for that project in the [Kapa platform](https://app.kapa.ai), then set it and the project ID:
 
 ```bash
 export KAPA_API_KEY="your-api-key"
@@ -84,7 +84,7 @@ from langchain_kapa_ai import KapaToolkit
 tools = KapaToolkit().get_tools()
 ```
 
-The [quickstart](https://docs.kapa.ai/frameworks/langchain/quickstart) attaches the toolkit to an agent, and the [reference](https://docs.kapa.ai/frameworks/langchain/reference) describes every setting, the document tool, and the errors.
+The [agent example](https://docs.kapa.ai/examples/langchain-knowledge-base-search) attaches the toolkit to an agent, and the [reference](https://docs.kapa.ai/retrieval/frameworks/langchain) describes every setting, the document tool, and the errors.
 
 ## Examples
 
@@ -108,6 +108,16 @@ make format-check lint typecheck test
 `make integration-test` runs the live tests against a project you choose. It reads `KAPA_API_KEY` and `KAPA_PROJECT_ID`, takes its queries from `KAPA_TEST_QUERIES` (one per line) or `tests/integration_tests/queries.local.txt`, and skips without them.
 
 The live example tests also need the LangChain package of the provider named in `KAPA_EXAMPLE_MODEL` available to the project interpreter, so run them with `uv run --with langchain-<provider> pytest tests/integration_tests`.
+
+## Releasing
+
+Releases are published from version tags by the [publish workflow](.github/workflows/publish.yml).
+
+1. Set the version with `uv version <version>` and add a `## <version>` section to [CHANGELOG.md](CHANGELOG.md).
+2. Merge the change to `main`.
+3. Tag the merged commit with the bare version, for example `git tag 0.1.0 origin/main`, and push the tag.
+
+The workflow checks that the tag matches the package version, the tagged commit is on `main`, and the changelog has the entry. It then runs the quality gates, publishes to TestPyPI and installs the result, and waits for a reviewer to approve the `pypi` environment before publishing to PyPI and installing the published package.
 
 ## License
 
