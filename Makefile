@@ -1,4 +1,4 @@
-.PHONY: format format-check lint typecheck test test-min-deps integration-test integration_test integration_tests build check-wheel eval studio
+.PHONY: format format-check lint typecheck test test-min-deps integration-test integration_test integration_tests build check-wheel studio
 
 PYTEST_OFFLINE := --disable-socket --allow-unix-socket
 MIN_PYTHON := 3.10
@@ -43,9 +43,6 @@ check-wheel:
 		$(CHECK_VENV)/bin/python scripts/check_install.py || exit 1; \
 	done
 	rm -rf $(CHECK_VENV)
-
-eval:
-	uv run python evals/run.py $(ARGS)
 
 studio:
 	uv run langgraph dev --config examples/langgraph.json

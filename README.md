@@ -86,12 +86,11 @@ tools = KapaToolkit().get_tools()
 
 The [quickstart](https://docs.kapa.ai/frameworks/langchain/quickstart) attaches the toolkit to an agent, and the [reference](https://docs.kapa.ai/frameworks/langchain/reference) describes every setting, the document tool, and the errors.
 
-## Examples and evaluations
+## Examples
 
 - [`examples/`](examples/): search without a model, a fixed question-to-answer pipeline, and an agent that searches and follows citations into whole documents.
-- [`evals/`](evals/): a fictional product corpus with questions and reference answers, and a runner that measures retrieval and answer quality.
 
-The examples and evaluations work with any chat model that supports tool calling, for example from OpenAI or Anthropic. Install that provider's LangChain package, set its API key, and name the model in LangChain's `provider:model` form:
+The examples work with any chat model that supports tool calling, for example from OpenAI or Anthropic. Install that provider's LangChain package, set its API key, and name the model in LangChain's `provider:model` form:
 
 ```bash
 export KAPA_EXAMPLE_MODEL="<provider>:<model>"

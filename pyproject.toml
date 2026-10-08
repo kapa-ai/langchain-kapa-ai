@@ -66,7 +66,6 @@ default-groups = ["dev"]
 [tool.ruff]
 target-version = "py310"
 line-length = 88
-extend-exclude = ["evals/corpus"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "ASYNC", "PT", "T20", "S"]
@@ -75,14 +74,12 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "ASYNC", "PT", "T20", "S"
 "tests/**" = ["S101", "S105", "S106", "S603", "T20"]
 "examples/**" = ["T20"]
 "scripts/**" = ["T20", "S101"]
-"evals/**" = ["T20", "S603", "S607"]
 
 [tool.mypy]
 python_version = "3.10"
 strict = true
 plugins = ["pydantic.mypy"]
-files = ["src", "tests", "examples", "evals", "scripts"]
-exclude = ["^evals/corpus/"]
+files = ["src", "tests", "examples", "scripts"]
 
 [[tool.mypy.overrides]]
 module = ["pytest_socket"]

@@ -9,5 +9,4 @@ build/
 .pytest_cache/
 .langgraph_api/
 .env
-evals/results/
 tests/integration_tests/queries.local.txt
