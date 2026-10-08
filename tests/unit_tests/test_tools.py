@@ -291,7 +291,7 @@ def test_failed_request_does_not_become_an_empty_result(kapa: FakeKapa) -> None:
 @pytest.mark.parametrize(
     ("args", "result"),
     [
-        ({"urls": [GUIDE.source_url]}, CODE.as_result(CODE.source_url)),
+        ({"urls": [GUIDE.source_url]}, CODE.as_result([str(CODE.source_url)])),
         ({"urls": [GUIDE.source_url]}, GUIDE.as_result()),
         ({"document_ids": [GUIDE.document_id]}, CODE.as_result()),
     ],
@@ -317,8 +317,8 @@ def test_unrequested_results_raise(
             "results": [
                 {
                     key: value
-                    for key, value in GUIDE.as_result(GUIDE.source_url).items()
-                    if key != "requested_url"
+                    for key, value in GUIDE.as_result([str(GUIDE.source_url)]).items()
+                    if key != "requested_urls"
                 }
             ]
         },

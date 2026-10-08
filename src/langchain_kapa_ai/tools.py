@@ -37,7 +37,10 @@ _DESCRIPTION = (
 class KapaGetDocumentsInput(BaseModel):
     """Arguments of the Kapa document tool."""
 
-    urls: list[Annotated[str, StringConstraints(min_length=1)]] | None = Field(
+    urls: (
+        list[Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]]
+        | None
+    ) = Field(
         default=None,
         description=(
             "Source links of the documents to fetch, exactly as they appear in "
@@ -117,7 +120,7 @@ class KapaDocumentsPage(BaseModel):
 
 
 class _DocumentResult(BaseModel):
-    requested_url: str | None
+    requested_urls: list[str]
     document_id: UUID
     source_url: str | None
     title: str
@@ -184,10 +187,11 @@ def _index_by_url(
     wanted = set(requested)
     found: dict[str, _DocumentResult] = {}
     for result in results:
-        if result.requested_url is None or result.requested_url not in wanted:
+        if not result.requested_urls or not wanted.issuperset(result.requested_urls):
             msg = "Kapa returned a document for a link that was not requested."
             raise KapaResponseError(msg)
-        found[result.requested_url] = result
+        for link in result.requested_urls:
+            found[link] = result
     return found
 
 

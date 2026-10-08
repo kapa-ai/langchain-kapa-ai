@@ -20,12 +20,12 @@ class StoredDocument:
     total_chars: int | None = None
     truncated: bool = False
 
-    def as_result(self, requested_url: str | None = None) -> dict[str, Any]:
+    def as_result(self, requested_urls: list[str] | None = None) -> dict[str, Any]:
         total = self.total_chars
         if total is None:
             total = len(self.content) if self.content is not None else 0
         return {
-            "requested_url": requested_url,
+            "requested_urls": requested_urls or [],
             "document_id": self.document_id,
             "source_url": self.source_url,
             "title": self.title,
@@ -68,7 +68,14 @@ class FakeKapa:
         ] + [(None, by_id.get(i)) for i in ids]
         page, page_size = body.get("page", 1), body.get("page_size", 5)
         window = requests[(page - 1) * page_size : page * page_size]
-        results = [doc.as_result(url) for url, doc in window if doc is not None]
+        grouped: dict[str, tuple[StoredDocument, list[str]]] = {}
+        for url, doc in window:
+            if doc is None:
+                continue
+            _, requested_urls = grouped.setdefault(doc.document_id, (doc, []))
+            if url is not None:
+                requested_urls.append(url)
+        results = [doc.as_result(urls) for doc, urls in grouped.values()]
         return {
             "results": results,
             "page": page,
