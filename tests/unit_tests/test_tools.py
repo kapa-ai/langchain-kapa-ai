@@ -60,8 +60,8 @@ def outcomes(page: KapaDocumentsPage) -> list[tuple[Any, ...]]:
         (
             result.requested_url or result.requested_document_id,
             result.status,
-            result.match,
             result.matched_url,
+            result.document_id,
         )
         for result in page.results
     ]
@@ -71,75 +71,43 @@ def requested_urls(kapa: FakeKapa) -> list[list[str]]:
     return [body["urls"] for body in kapa.bodies if "urls" in body]
 
 
-def test_exact_match_needs_no_fallback(kapa: FakeKapa) -> None:
-    page = lookup(make_tool(kapa), urls=[GUIDE.source_url])
+def test_results_map_back_by_requested_url(kapa: FakeKapa) -> None:
+    urls = [GUIDE.source_url, "https://d.test/client.py#L10-L24", UPLOAD.source_url]
 
-    assert outcomes(page) == [(GUIDE.source_url, "found", "exact", GUIDE.source_url)]
-    assert requested_urls(kapa) == [[GUIDE.source_url]]
-
-
-def test_unmatched_fragment_falls_back_to_link_without_fragment(
-    kapa: FakeKapa,
-) -> None:
-    citations = [
-        "https://d.test/guide#install",
-        "https://d.test/client.py#L10-L24",
-        "https://d.test/manual.pdf#page=3",
-    ]
-
-    page = lookup(make_tool(kapa), urls=citations)
+    page = lookup(make_tool(kapa), urls=urls)
 
     assert outcomes(page) == [
-        (citations[0], "found", "fragment_removed", GUIDE.source_url),
-        (citations[1], "found", "fragment_removed", CODE.source_url),
-        (citations[2], "found", "fragment_removed", PDF.source_url),
+        (GUIDE.source_url, "found", GUIDE.source_url, GUIDE.document_id),
+        (urls[1], "found", CODE.source_url, CODE.document_id),
+        (UPLOAD.source_url, "found", UPLOAD.source_url, UPLOAD.document_id),
     ]
-    assert requested_urls(kapa) == [
-        citations,
-        [GUIDE.source_url, CODE.source_url, PDF.source_url],
+    assert requested_urls(kapa) == [urls]
+
+
+def test_link_the_backend_omits_is_not_found(kapa: FakeKapa) -> None:
+    urls = ["https://d.test/missing", "https://d.test/missing#a"]
+
+    page = lookup(make_tool(kapa), urls=urls)
+
+    assert outcomes(page) == [
+        (urls[0], "not_found", None, None),
+        (urls[1], "not_found", None, None),
     ]
-
-
-def test_exact_fragment_link_resolves_without_fallback(kapa: FakeKapa) -> None:
-    page = lookup(make_tool(kapa), urls=[UPLOAD.source_url])
-
-    assert outcomes(page) == [(UPLOAD.source_url, "found", "exact", UPLOAD.source_url)]
-    assert requested_urls(kapa) == [[UPLOAD.source_url]]
-
-
-def test_link_without_fragment_gets_no_fallback(kapa: FakeKapa) -> None:
-    page = lookup(make_tool(kapa), urls=["https://d.test/missing"])
-
-    assert outcomes(page) == [("https://d.test/missing", "not_found", None, None)]
-    assert requested_urls(kapa) == [["https://d.test/missing"]]
-
-
-def test_unresolvable_fragment_is_not_found(kapa: FakeKapa) -> None:
-    page = lookup(make_tool(kapa), urls=["https://d.test/missing#a"])
-
-    assert outcomes(page) == [("https://d.test/missing#a", "not_found", None, None)]
-    assert requested_urls(kapa) == [
-        ["https://d.test/missing#a"],
-        ["https://d.test/missing"],
-    ]
-
-
-def test_fragment_only_link_gets_no_empty_fallback(kapa: FakeKapa) -> None:
-    page = lookup(make_tool(kapa), urls=["#section"])
-
-    assert outcomes(page) == [("#section", "not_found", None, None)]
-    assert requested_urls(kapa) == [["#section"]]
+    assert page.documents == []
+    assert requested_urls(kapa) == [urls]
 
 
 def test_duplicate_links_are_requested_once(kapa: FakeKapa) -> None:
     page = lookup(make_tool(kapa), urls=[GUIDE.source_url, GUIDE.source_url])
 
-    assert outcomes(page) == [(GUIDE.source_url, "found", "exact", GUIDE.source_url)]
+    assert outcomes(page) == [
+        (GUIDE.source_url, "found", GUIDE.source_url, GUIDE.document_id)
+    ]
     assert page.total_requested == 1
     assert requested_urls(kapa) == [[GUIDE.source_url]]
 
 
-def test_citations_into_one_document_fetch_it_once(kapa: FakeKapa) -> None:
+def test_links_to_one_document_list_it_once(kapa: FakeKapa) -> None:
     citations = ["https://d.test/guide#a", "https://d.test/guide#b"]
 
     page = lookup(make_tool(kapa), urls=citations)
@@ -147,19 +115,7 @@ def test_citations_into_one_document_fetch_it_once(kapa: FakeKapa) -> None:
     assert [r.status for r in page.results] == ["found", "found"]
     assert [d.document_id for d in page.documents] == [GUIDE.document_id]
     assert page.total_requested == 2
-    assert requested_urls(kapa) == [citations, [GUIDE.source_url]]
-
-
-def test_requested_base_link_is_reused_for_fallback(kapa: FakeKapa) -> None:
-    urls = ["https://d.test/guide#a", GUIDE.source_url]
-
-    page = lookup(make_tool(kapa), urls=urls)
-
-    assert outcomes(page) == [
-        (urls[0], "found", "fragment_removed", GUIDE.source_url),
-        (GUIDE.source_url, "found", "exact", GUIDE.source_url),
-    ]
-    assert requested_urls(kapa) == [urls]
+    assert requested_urls(kapa) == [citations]
 
 
 def test_results_follow_request_order(kapa: FakeKapa) -> None:
@@ -167,10 +123,10 @@ def test_results_follow_request_order(kapa: FakeKapa) -> None:
 
     page = lookup(make_tool(kapa), urls=urls)
 
-    assert [result.requested_url for result in page.results] == [
-        "https://d.test/guide#a",
-        CODE.source_url,
-        "https://d.test/guide#b",
+    assert [result.requested_url for result in page.results] == urls
+    assert [d.document_id for d in page.documents] == [
+        GUIDE.document_id,
+        CODE.document_id,
     ]
 
 
@@ -181,7 +137,7 @@ def test_document_ids_are_deduplicated_case_insensitively(kapa: FakeKapa) -> Non
     page = lookup(make_tool(kapa), document_ids=[CODE.document_id, upper, missing])
 
     assert outcomes(page) == [
-        (CODE.document_id, "found", "document_id", None),
+        (CODE.document_id, "found", None, CODE.document_id),
         (missing, "not_found", None, None),
     ]
     assert [body["document_ids"] for body in kapa.bodies] == [
@@ -194,7 +150,10 @@ def test_urls_and_ids_are_requested_separately(kapa: FakeKapa) -> None:
         make_tool(kapa), urls=[GUIDE.source_url], document_ids=[GUIDE.document_id]
     )
 
-    assert [r.match for r in page.results] == ["exact", "document_id"]
+    assert outcomes(page) == [
+        (GUIDE.source_url, "found", GUIDE.source_url, GUIDE.document_id),
+        (GUIDE.document_id, "found", None, GUIDE.document_id),
+    ]
     assert [d.document_id for d in page.documents] == [GUIDE.document_id]
     assert [sorted(body) for body in kapa.bodies] == [
         ["page", "page_size", "urls"],
@@ -208,7 +167,7 @@ def test_backend_requests_stay_within_page_limit(kapa: FakeKapa) -> None:
     page = lookup(make_tool(kapa, page_size=7), urls=urls)
 
     assert all(r.status == "found" for r in page.results)
-    assert requested_urls(kapa) == [urls[:5], urls[5:], [GUIDE.source_url]]
+    assert requested_urls(kapa) == [urls[:5], urls[5:]]
     assert all(body["page"] == 1 for body in kapa.bodies)
     assert all(body["page_size"] == len(body["urls"]) for body in kapa.bodies)
 
@@ -220,7 +179,7 @@ def test_source_groups_and_content_bound_apply_to_every_request(
 
     lookup(tool, urls=["https://d.test/guide#a"], document_ids=[CODE.document_id])
 
-    assert len(kapa.bodies) == 3
+    assert len(kapa.bodies) == 2
     for body in kapa.bodies:
         assert body["source_group_ids_include"] == ["group-a"]
         assert body["max_chars_per_document"] == 100
@@ -329,18 +288,24 @@ def test_failed_request_does_not_become_an_empty_result(kapa: FakeKapa) -> None:
     assert len(kapa.requests) == 1
 
 
-def test_failed_fallback_request_raises(kapa: FakeKapa) -> None:
-    tool = make_tool(kapa)
-
+@pytest.mark.parametrize(
+    ("args", "result"),
+    [
+        ({"urls": [GUIDE.source_url]}, CODE.as_result(CODE.source_url)),
+        ({"urls": [GUIDE.source_url]}, GUIDE.as_result()),
+        ({"document_ids": [GUIDE.document_id]}, CODE.as_result()),
+    ],
+)
+def test_unrequested_results_raise(
+    kapa: FakeKapa, args: dict[str, Any], result: dict[str, Any]
+) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        if len(kapa.requests) > 1:
-            return httpx.Response(503, json={"detail": "busy"})
-        return httpx.Response(200, json={"results": []})
+        return httpx.Response(200, json={"results": [result]})
 
     kapa.override = handler
 
-    with pytest.raises(KapaServiceError):
-        tool.invoke({"urls": ["https://d.test/guide#a"]})
+    with pytest.raises(KapaResponseError, match="not requested"):
+        make_tool(kapa).invoke(args)
 
 
 @pytest.mark.parametrize(
@@ -348,7 +313,15 @@ def test_failed_fallback_request_raises(kapa: FakeKapa) -> None:
     [
         [],
         {"results": [{"document_id": GUIDE.document_id}]},
-        {"results": [{**CODE.as_result()}]},
+        {
+            "results": [
+                {
+                    key: value
+                    for key, value in GUIDE.as_result(GUIDE.source_url).items()
+                    if key != "requested_url"
+                }
+            ]
+        },
     ],
 )
 def test_malformed_responses_raise(kapa: FakeKapa, payload: object) -> None:
@@ -357,5 +330,5 @@ def test_malformed_responses_raise(kapa: FakeKapa, payload: object) -> None:
 
     kapa.override = handler
 
-    with pytest.raises(KapaResponseError):
+    with pytest.raises(KapaResponseError, match="unexpected fields"):
         make_tool(kapa).invoke({"urls": [GUIDE.source_url]})

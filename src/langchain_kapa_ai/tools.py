@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Annotated, Any, Literal
-from urllib.parse import urldefrag
 from uuid import UUID
 
 from langchain_core.callbacks import (
@@ -27,7 +26,8 @@ _DESCRIPTION = (
     "Fetch whole documents from the Kapa knowledge base by source link or document "
     "ID. Use it when a search result is not enough and you need the complete "
     "document. Pass source links exactly as they appear in search results, "
-    "including any part after '#'. For each requested link or ID, the result says "
+    "including any part after '#'; Kapa matches each link exactly first, then "
+    "without its fragment. For each requested link or ID, the result says "
     "whether a document was found and which stored link matched; the documents "
     "follow. Content can be truncated, and it is null when the document text is "
     "unavailable. When has_more is true, call again with next_page."
@@ -41,7 +41,8 @@ class KapaGetDocumentsInput(BaseModel):
         default=None,
         description=(
             "Source links of the documents to fetch, exactly as they appear in "
-            "search results."
+            "search results. Kapa matches each link exactly first, then without "
+            "its fragment."
         ),
     )
     document_ids: list[UUID] | None = Field(
@@ -89,10 +90,9 @@ class KapaDocumentRequestResult(BaseModel):
     """Document ID as requested, when the item is an ID."""
     status: Literal["found", "not_found"]
     """Whether a document was found."""
-    match: Literal["exact", "fragment_removed", "document_id"] | None = None
-    """How the document was matched."""
     matched_url: str | None = None
-    """Stored link that matched, for link requests."""
+    """Stored link of the found document, for link requests; it differs from the
+    requested link when Kapa matched the link without its fragment."""
     document_id: str | None = None
     """ID of the document found."""
 
@@ -111,12 +111,13 @@ class KapaDocumentsPage(BaseModel):
     next_page: int | None
     """Number of the next page; None on the last page."""
     results: list[KapaDocumentRequestResult]
-    """Outcome of each requested link or ID on this page."""
+    """Outcome of each requested link or ID on this page, in request order."""
     documents: list[KapaDocument]
-    """Each document found on this page, once."""
+    """Each document found on this page, once, in request order."""
 
 
 class _DocumentResult(BaseModel):
+    requested_url: str | None
     document_id: UUID
     source_url: str | None
     title: str
@@ -130,46 +131,16 @@ class _DocumentsResponse(BaseModel):
 
 
 @dataclass
-class _UrlGroup:
-    base: str
-    links: list[str] = field(default_factory=list)
-
-    @property
-    def base_requested(self) -> bool:
-        return self.base in self.links
-
-    def needs_fallback(self, found: dict[str, _DocumentResult]) -> bool:
-        if not self.base or self.base_requested:
-            return False
-        return any(link not in found for link in self.links)
-
-    def base_result(
-        self,
-        exact: dict[str, _DocumentResult],
-        fallback: dict[str, _DocumentResult],
-    ) -> _DocumentResult | None:
-        if self.base_requested:
-            return exact.get(self.base)
-        return fallback.get(self.base)
-
-
-@dataclass
 class _PagePlan:
     page: int
     page_size: int
     total_requested: int
     urls: list[str]
-    groups: dict[str, _UrlGroup]
     document_ids: list[UUID]
 
     @property
     def has_more(self) -> bool:
         return self.page * self.page_size < self.total_requested
-
-    def fallback_urls(self, found: dict[str, _DocumentResult]) -> list[str]:
-        return [
-            group.base for group in self.groups.values() if group.needs_fallback(found)
-        ]
 
 
 def _plan_page(
@@ -183,17 +154,11 @@ def _plan_page(
         *dict.fromkeys(document_ids or []),
     ]
     page_items = items[(page - 1) * page_size : page * page_size]
-    page_urls = [item for item in page_items if isinstance(item, str)]
-    groups: dict[str, _UrlGroup] = {}
-    for link in page_urls:
-        base = urldefrag(link).url
-        groups.setdefault(base, _UrlGroup(base)).links.append(link)
     return _PagePlan(
         page=page,
         page_size=page_size,
         total_requested=len(items),
-        urls=page_urls,
-        groups=groups,
+        urls=[item for item in page_items if isinstance(item, str)],
         document_ids=[item for item in page_items if isinstance(item, UUID)],
     )
 
@@ -219,10 +184,10 @@ def _index_by_url(
     wanted = set(requested)
     found: dict[str, _DocumentResult] = {}
     for result in results:
-        if result.source_url not in wanted:
+        if result.requested_url is None or result.requested_url not in wanted:
             msg = "Kapa returned a document for a link that was not requested."
             raise KapaResponseError(msg)
-        found[result.source_url] = result
+        found[result.requested_url] = result
     return found
 
 
@@ -253,8 +218,7 @@ def _to_document(result: _DocumentResult) -> KapaDocument:
 
 def _assemble(
     plan: _PagePlan,
-    exact: dict[str, _DocumentResult],
-    fallback: dict[str, _DocumentResult],
+    by_url: dict[str, _DocumentResult],
     by_id: dict[UUID, _DocumentResult],
 ) -> KapaDocumentsPage:
     results: list[KapaDocumentRequestResult] = []
@@ -265,15 +229,8 @@ def _assemble(
         return str(result.document_id)
 
     for link in plan.urls:
-        group = plan.groups[urldefrag(link).url]
-        base_result = group.base_result(exact, fallback)
-        if link in exact:
-            result = exact[link]
-            match: Literal["exact", "fragment_removed"] = "exact"
-        elif link != group.base and base_result is not None:
-            result = base_result
-            match = "fragment_removed"
-        else:
+        result = by_url.get(link)
+        if result is None:
             results.append(
                 KapaDocumentRequestResult(requested_url=link, status="not_found")
             )
@@ -282,7 +239,6 @@ def _assemble(
             KapaDocumentRequestResult(
                 requested_url=link,
                 status="found",
-                match=match,
                 matched_url=result.source_url,
                 document_id=found(result),
             )
@@ -301,7 +257,6 @@ def _assemble(
             KapaDocumentRequestResult(
                 requested_document_id=str(document_id),
                 status="found",
-                match="document_id",
                 document_id=found(id_result),
             )
         )
@@ -340,10 +295,10 @@ class KapaDocumentSettings(BaseModel):
 class KapaGetDocumentsTool(KapaSettings, KapaDocumentSettings, BaseTool):
     """Fetch whole documents from a Kapa knowledge base by link or document ID.
 
-    Links are looked up exactly as given first. Only a link that matches nothing
-    and carries a fragment is retried with the fragment removed, and the result
-    reports which stored link matched. A page covers `page_size` distinct
-    requested links and document IDs, so it returns at most that many documents.
+    Kapa matches each link exactly first, then without its fragment, and each
+    result reports the stored link that matched. A page covers `page_size`
+    distinct requested links and document IDs, so it returns at most that many
+    documents.
     """
 
     name: str = "kapa_get_documents"
@@ -413,10 +368,9 @@ class KapaGetDocumentsTool(KapaSettings, KapaDocumentSettings, BaseTool):
     ) -> tuple[str, KapaDocumentsPage]:
         plan = _plan_page(urls, document_ids, page, self.page_size)
         with self._kapa_client().session() as session:
-            exact = self._fetch_urls(session, plan.urls)
-            fallback = self._fetch_urls(session, plan.fallback_urls(exact))
+            by_url = self._fetch_urls(session, plan.urls)
             by_id = self._fetch_ids(session, plan.document_ids)
-        result = _assemble(plan, exact, fallback, by_id)
+        result = _assemble(plan, by_url, by_id)
         return result.model_dump_json(), result
 
     async def _arun(
@@ -428,8 +382,7 @@ class KapaGetDocumentsTool(KapaSettings, KapaDocumentSettings, BaseTool):
     ) -> tuple[str, KapaDocumentsPage]:
         plan = _plan_page(urls, document_ids, page, self.page_size)
         async with self._kapa_client().async_session() as session:
-            exact = await self._afetch_urls(session, plan.urls)
-            fallback = await self._afetch_urls(session, plan.fallback_urls(exact))
+            by_url = await self._afetch_urls(session, plan.urls)
             by_id = await self._afetch_ids(session, plan.document_ids)
-        result = _assemble(plan, exact, fallback, by_id)
+        result = _assemble(plan, by_url, by_id)
         return result.model_dump_json(), result

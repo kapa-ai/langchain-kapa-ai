@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from urllib.parse import urldefrag
 
 import pytest
 
@@ -19,10 +18,10 @@ pytestmark = requires_queries
 
 def anchor_kind(result: KapaDocumentRequestResult) -> str:
     link = result.requested_url or ""
-    fragment = urldefrag(link).fragment
     if "#" not in link:
         return "no anchor"
-    if result.match == "exact":
+    fragment = link.partition("#")[2]
+    if result.matched_url == link:
         return "exact fragment-bearing link"
     if re.fullmatch(r"L\d+(-L\d+)?", fragment):
         return "line"

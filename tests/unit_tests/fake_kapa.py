@@ -4,6 +4,7 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import urldefrag
 
 import httpx
 
@@ -20,11 +21,12 @@ class StoredDocument:
     total_chars: int | None = None
     truncated: bool = False
 
-    def as_result(self) -> dict[str, Any]:
+    def as_result(self, requested_url: str | None = None) -> dict[str, Any]:
         total = self.total_chars
         if total is None:
             total = len(self.content) if self.content is not None else 0
         return {
+            "requested_url": requested_url,
             "document_id": self.document_id,
             "source_url": self.source_url,
             "title": self.title,
@@ -62,16 +64,28 @@ class FakeKapa:
         by_id = {doc.document_id.lower(): doc for doc in self.documents}
         urls = list(dict.fromkeys(body.get("urls") or []))
         ids = list(dict.fromkeys(i.lower() for i in body.get("document_ids") or []))
-        requests = [by_url.get(url) for url in urls] + [by_id.get(i) for i in ids]
+        requests: list[tuple[str | None, StoredDocument | None]] = [
+            (url, self._match_url(by_url, url)) for url in urls
+        ] + [(None, by_id.get(i)) for i in ids]
         page, page_size = body.get("page", 1), body.get("page_size", 5)
         window = requests[(page - 1) * page_size : page * page_size]
-        results = [doc.as_result() for doc in window if doc is not None]
+        results = [doc.as_result(url) for url, doc in window if doc is not None]
         return {
             "results": results,
             "page": page,
             "page_size": page_size,
-            "total_items": sum(doc is not None for doc in requests),
+            "total_items": sum(doc is not None for _, doc in requests),
         }
+
+    @staticmethod
+    def _match_url(
+        by_url: dict[str, StoredDocument], url: str
+    ) -> StoredDocument | None:
+        if url in by_url:
+            return by_url[url]
+        if "#" in url:
+            return by_url.get(urldefrag(url).url)
+        return None
 
     def client(self) -> httpx.Client:
         return httpx.Client(transport=httpx.MockTransport(self.handler))

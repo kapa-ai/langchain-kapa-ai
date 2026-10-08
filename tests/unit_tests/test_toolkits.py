@@ -98,8 +98,8 @@ async def test_async_tools_use_the_fake_transport(kapa: FakeKapa) -> None:
     looked_up = await documents.ainvoke({"urls": [CHUNK["source_url"]]})
 
     assert "Source: https://d.test/guide#install" in found
-    assert '"match":"fragment_removed"' in looked_up
-    assert len(kapa.requests) == 3
+    assert f'"matched_url":"{GUIDE.source_url}"' in looked_up
+    assert len(kapa.requests) == 2
 
 
 def test_secrets_stay_out_of_the_toolkit_representation(kapa: FakeKapa) -> None:
