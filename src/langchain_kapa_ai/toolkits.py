@@ -11,7 +11,7 @@ from langchain_kapa_ai.tools import KapaDocumentSettings, KapaGetDocumentsTool
 
 SEARCH_TOOL_NAME = "kapa_search_knowledge_base"
 SEARCH_TOOL_DESCRIPTION = (
-    "Search the project's knowledge base. Returns relevant passages, each with its "
+    "Search the project's knowledge base. Returns relevant chunks, each with its "
     "source link."
 )
 SEARCH_DOCUMENT_PROMPT = "Source: {source}\n{page_content}"

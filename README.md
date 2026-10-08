@@ -5,7 +5,7 @@
 
 LangChain integration for [Kapa.ai](https://www.kapa.ai). It provides a retriever, a document tool, and a toolkit that returns both as agent tools, so Python LangChain applications and agents can search a Kapa knowledge base and look up whole documents for the sources a search returns.
 
-- `KapaRetriever` returns the most relevant passages for a query as LangChain documents, each with its source link in `metadata["source"]`.
+- `KapaRetriever` returns the most relevant chunks for a query as LangChain documents, each with its source link in `metadata["source"]`.
 - `KapaGetDocumentsTool` lets an agent fetch whole documents by the source links that search results cite, or by document ID.
 - `KapaToolkit` returns both as agent tools, configured from one set of settings.
 
@@ -42,7 +42,7 @@ tool = KapaGetDocumentsTool()
 print(tool.invoke({"urls": ["https://docs.example.com/guide#install"]}))
 ```
 
-The retriever also works in a chain. This one passes the passages and their source links to a chat model named in LangChain's `provider:model` form:
+The retriever also works in a chain. This one passes the chunks and their source links to a chat model named in LangChain's `provider:model` form:
 
 ```python
 import os
@@ -64,8 +64,8 @@ def format_documents(documents: list[Document]) -> str:
 
 
 prompt = ChatPromptTemplate.from_template(
-    "Answer from the passages and cite their sources.\n\n"
-    "Passages:\n{context}\n\nQuestion: {question}"
+    "Answer from the chunks and cite their sources.\n\n"
+    "Chunks:\n{context}\n\nQuestion: {question}"
 )
 chain = (
     {"context": KapaRetriever() | format_documents, "question": RunnablePassthrough()}
@@ -76,7 +76,7 @@ chain = (
 print(chain.invoke("How do I rotate an API key?"))
 ```
 
-`KapaToolkit` gives an agent both tools, a search tool that shows each passage with its source link and the document tool, from one set of settings:
+`KapaToolkit` gives an agent both tools, a search tool that shows each chunk with its source link and the document tool, from one set of settings:
 
 ```python
 from langchain_kapa_ai import KapaToolkit

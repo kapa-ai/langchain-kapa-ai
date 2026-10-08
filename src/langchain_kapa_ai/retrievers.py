@@ -48,12 +48,12 @@ class KapaRetrievalSettings(BaseModel):
     top_k: int | None = Field(
         default=None,
         ge=1,
-        description="Maximum number of passages; Kapa's default applies when unset.",
+        description="Maximum number of chunks; Kapa's default applies when unset.",
     )
     max_chars: int | None = Field(
         default=None,
         ge=1,
-        description="Maximum characters across all passages; Kapa's default if unset.",
+        description="Maximum characters across all chunks; Kapa's default if unset.",
     )
     source_group_ids: list[str] | None = Field(
         default=None,
@@ -69,9 +69,9 @@ class KapaRetrievalSettings(BaseModel):
 
 
 class KapaRetriever(KapaSettings, KapaRetrievalSettings, BaseRetriever):
-    """Retrieve relevant passages from a Kapa knowledge base.
+    """Retrieve relevant chunks from a Kapa knowledge base.
 
-    Each document's `page_content` is the passage text and `metadata["source"]`
+    Each document's `page_content` is the chunk text and `metadata["source"]`
     is its citation link, unchanged from Kapa.
     """
 

@@ -28,9 +28,9 @@ if ":" not in MODEL:
 
 SYSTEM_PROMPT = (
     "You answer questions from the knowledge base. Search before you answer. "
-    "When a passage is not enough, fetch its whole document with "
-    "kapa_get_documents, passing the passage's source link unchanged. Cite the "
-    "source links of the passages you used, exactly as the search returned them. "
+    "When a chunk is not enough, fetch its whole document with "
+    "kapa_get_documents, passing the chunk's source link unchanged. Cite the "
+    "source links of the chunks you used, exactly as the search returned them. "
     "If the knowledge base does not answer the question, say so."
 )
 
@@ -52,17 +52,17 @@ def snippet(text: str, limit: int = 160) -> str:
 
 
 def show_search_results(message: ToolMessage) -> None:
-    passages = message.artifact
-    if not isinstance(passages, list):
+    chunks = message.artifact
+    if not isinstance(chunks, list):
         print(f"  {snippet(message.text, 300)}")
         return
-    if not passages:
-        print("  (no passages)")
-    for number, passage in enumerate(passages, start=1):
-        if isinstance(passage, Document):
-            source = passage.metadata["source"] or "(no link)"
+    if not chunks:
+        print("  (no chunks)")
+    for number, chunk in enumerate(chunks, start=1):
+        if isinstance(chunk, Document):
+            source = chunk.metadata["source"] or "(no link)"
             print(f"  [{number}] {source}")
-            print(f"      {snippet(passage.page_content)}")
+            print(f"      {snippet(chunk.page_content)}")
 
 
 def show_documents(message: ToolMessage) -> None:
@@ -84,7 +84,8 @@ def show_documents(message: ToolMessage) -> None:
             print(f"  {requested}: not found")
             continue
         length = lengths.get(result.document_id or "", "")
-        print(f"  {requested}: found by {result.match}, {result.matched_url}, {length}")
+        found = result.matched_url or result.document_id
+        print(f"  {requested}: found {found}, {length}")
     if page.has_more:
         print(f"  more requested items on page {page.next_page}")
 

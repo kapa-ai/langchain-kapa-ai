@@ -1,4 +1,4 @@
-"""Answer a question from retrieved passages with a fixed pipeline.
+"""Answer a question from retrieved chunks with a fixed pipeline.
 
 Works with any chat model that supports tool calling. Install that provider's
 LangChain package, set its API key, and name the model in LangChain's
@@ -24,8 +24,8 @@ if ":" not in MODEL:
     )
 
 INSTRUCTIONS = (
-    "Answer the question using only the numbered passages. Cite the passages you "
-    "used by their source links. If the passages do not answer the question, say "
+    "Answer the question using only the numbered chunks. Cite the chunks you "
+    "used by their source links. If the chunks do not answer the question, say "
     "that the knowledge base does not cover it."
 )
 
@@ -44,12 +44,12 @@ def main() -> None:
     documents = KapaRetriever().invoke(question)
     evidence = format_evidence(documents)
     print("Evidence\n--------")
-    print(evidence or "(no passages returned)")
+    print(evidence or "(no chunks returned)")
 
     answer = model.invoke(
         [
             ("system", INSTRUCTIONS),
-            ("human", f"Passages:\n\n{evidence}\n\nQuestion: {question}"),
+            ("human", f"Chunks:\n\n{evidence}\n\nQuestion: {question}"),
         ]
     )
     print("\nAnswer\n------")
