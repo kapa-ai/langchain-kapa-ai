@@ -4,7 +4,6 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import urldefrag
 
 import httpx
 
@@ -83,8 +82,9 @@ class FakeKapa:
     ) -> StoredDocument | None:
         if url in by_url:
             return by_url[url]
-        if "#" in url:
-            return by_url.get(urldefrag(url).url)
+        base = url.partition("#")[0]
+        if base and base != url:
+            return by_url.get(base)
         return None
 
     def client(self) -> httpx.Client:
