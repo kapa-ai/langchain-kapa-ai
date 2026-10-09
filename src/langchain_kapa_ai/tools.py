@@ -23,13 +23,14 @@ from langchain_kapa_ai.exceptions import KapaResponseError
 _DOCUMENTS_PER_REQUEST = 5
 
 _DESCRIPTION = (
-    "Fetch whole documents from the Kapa knowledge base by source link or document "
-    "ID. Use it when a search result is not enough and you need the complete "
-    "document. Pass source links exactly as they appear in search results, "
-    "including any part after '#'. Returns the documents found; links and IDs "
-    "that match nothing are omitted. Content can be truncated, and it is null "
-    "when the document text is unavailable. When has_more is true, call again "
-    "with next_page."
+    "Fetch full documents from the knowledge sources by their source URL or "
+    "document ID. Pass source URLs exactly as search results return them, "
+    "including any part after '#'. Returns a markdown representation of the full "
+    "content of each matched document; results may be empty if none of the "
+    "requested URLs or IDs match. Long documents are truncated, and content is "
+    "null when the document text is unavailable. The results are paginated; when "
+    "has_more is true, call again with next_page. Use this tool when you simply "
+    "want to look up the content of one or more specific documents."
 )
 
 
@@ -213,7 +214,7 @@ class KapaGetDocumentsTool(KapaSettings, KapaDocumentSettings, BaseTool):
     returns at most that many documents.
     """
 
-    name: str = "kapa_get_documents"
+    name: str = "get_knowledge_documents"
     """Tool name shown to the model."""
     description: str = _DESCRIPTION
     """Tool description shown to the model."""

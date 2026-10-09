@@ -29,7 +29,7 @@ if ":" not in MODEL:
 SYSTEM_PROMPT = (
     "You answer questions from the knowledge base. Search before you answer. "
     "When a chunk is not enough, fetch its whole document with "
-    "kapa_get_documents, passing the chunk's source link unchanged. Cite the "
+    "get_knowledge_documents, passing the chunk's source link unchanged. Cite the "
     "source links of the chunks you used, exactly as the search returned them. "
     "If the knowledge base does not answer the question, say so."
 )

@@ -9,10 +9,16 @@ from langchain_kapa_ai._client import KapaSettings
 from langchain_kapa_ai.retrievers import KapaRetrievalSettings, KapaRetriever
 from langchain_kapa_ai.tools import KapaDocumentSettings, KapaGetDocumentsTool
 
-SEARCH_TOOL_NAME = "kapa_search_knowledge_base"
+SEARCH_TOOL_NAME = "search_knowledge_sources"
 SEARCH_TOOL_DESCRIPTION = (
-    "Search the project's knowledge base. Returns relevant chunks, each with its "
-    "source link."
+    "Perform semantic retrieval over the knowledge sources and return the most "
+    'relevant chunks for a given query. A "chunk" is a short, self-contained '
+    "snippet of text taken from a single page or item within these sources (for "
+    "example, part of a documentation page) and includes its source URL and "
+    "markdown content. Chunks are returned in descending order of relevance to "
+    "the query. If the knowledge sources do not contain information relevant to "
+    "the query, the returned chunks may be only weakly related or entirely "
+    "unrelated."
 )
 SEARCH_DOCUMENT_PROMPT = "Source: {source}\n{page_content}"
 

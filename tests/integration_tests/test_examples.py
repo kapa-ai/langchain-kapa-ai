@@ -40,4 +40,4 @@ def test_answer_prints_evidence_and_answer() -> None:
 
 @requires_model
 def test_agent_shows_its_searches() -> None:
-    assert "kapa_search_knowledge_base" in run_example("agent.py")
+    assert "search_knowledge_sources" in run_example("agent.py")
