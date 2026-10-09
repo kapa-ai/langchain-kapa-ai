@@ -24,8 +24,8 @@ _DOCUMENTS_PER_REQUEST = 5
 
 _DESCRIPTION = (
     "Fetch full documents from the knowledge sources by their source URL or "
-    "document ID. Pass source URLs exactly as search results return them, "
-    "including any part after '#'. Returns a markdown representation of the full "
+    "document ID. Pass source URLs as search results return them. Returns a "
+    "markdown representation of the full "
     "content of each matched document; results may be empty if none of the "
     "requested URLs or IDs match. Long documents are truncated, and content is "
     "null when the document text is unavailable. The results are paginated; when "
@@ -43,8 +43,7 @@ class KapaGetDocumentsInput(BaseModel):
     ) = Field(
         default=None,
         description=(
-            "Source links of the documents to fetch, exactly as they appear in "
-            "search results, including any part after '#'."
+            "Source links of the documents to fetch, as search results return them."
         ),
     )
     document_ids: list[UUID] | None = Field(

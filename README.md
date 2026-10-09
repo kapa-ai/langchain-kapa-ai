@@ -39,7 +39,7 @@ for document in retriever.invoke("How do I rotate an API key?"):
 from langchain_kapa_ai import KapaGetDocumentsTool
 
 tool = KapaGetDocumentsTool()
-print(tool.invoke({"urls": ["https://docs.example.com/guide#install"]}))
+print(tool.invoke({"urls": ["https://docs.example.com/guide"]}))
 ```
 
 The retriever also works in a chain. This one passes the chunks and their source links to a chat model named in LangChain's `provider:model` form:
