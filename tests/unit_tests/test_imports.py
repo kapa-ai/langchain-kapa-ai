@@ -5,7 +5,6 @@ EXPECTED_ALL = {
     "KapaAuthenticationError",
     "KapaConnectionError",
     "KapaDocument",
-    "KapaDocumentRequestResult",
     "KapaDocumentsPage",
     "KapaEndUser",
     "KapaError",

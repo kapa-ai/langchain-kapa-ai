@@ -15,7 +15,6 @@ from langchain_kapa_ai.retrievers import KapaEndUser, KapaRetriever
 from langchain_kapa_ai.toolkits import KapaToolkit
 from langchain_kapa_ai.tools import (
     KapaDocument,
-    KapaDocumentRequestResult,
     KapaDocumentsPage,
     KapaGetDocumentsInput,
     KapaGetDocumentsTool,
@@ -28,7 +27,6 @@ __all__ = [
     "KapaAuthenticationError",
     "KapaConnectionError",
     "KapaDocument",
-    "KapaDocumentRequestResult",
     "KapaDocumentsPage",
     "KapaEndUser",
     "KapaError",

@@ -20,12 +20,11 @@ class StoredDocument:
     total_chars: int | None = None
     truncated: bool = False
 
-    def as_result(self, requested_urls: list[str] | None = None) -> dict[str, Any]:
+    def as_result(self) -> dict[str, Any]:
         total = self.total_chars
         if total is None:
             total = len(self.content) if self.content is not None else 0
         return {
-            "requested_urls": requested_urls or [],
             "document_id": self.document_id,
             "source_url": self.source_url,
             "title": self.title,
@@ -63,24 +62,17 @@ class FakeKapa:
         by_id = {doc.document_id.lower(): doc for doc in self.documents}
         urls = list(dict.fromkeys(body.get("urls") or []))
         ids = list(dict.fromkeys(i.lower() for i in body.get("document_ids") or []))
-        requests: list[tuple[str | None, StoredDocument | None]] = [
-            (url, self._match_url(by_url, url)) for url in urls
-        ] + [(None, by_id.get(i)) for i in ids]
+        matches = [self._match_url(by_url, url) for url in urls] + [
+            by_id.get(i) for i in ids
+        ]
         page, page_size = body.get("page", 1), body.get("page_size", 5)
-        window = requests[(page - 1) * page_size : page * page_size]
-        grouped: dict[str, tuple[StoredDocument, list[str]]] = {}
-        for url, doc in window:
-            if doc is None:
-                continue
-            _, requested_urls = grouped.setdefault(doc.document_id, (doc, []))
-            if url is not None:
-                requested_urls.append(url)
-        results = [doc.as_result(urls) for doc, urls in grouped.values()]
+        window = matches[(page - 1) * page_size : page * page_size]
+        found = {doc.document_id: doc for doc in window if doc is not None}
         return {
-            "results": results,
+            "results": [doc.as_result() for doc in found.values()],
             "page": page,
             "page_size": page_size,
-            "total_items": sum(doc is not None for _, doc in requests),
+            "total_items": sum(doc is not None for doc in matches),
         }
 
     @staticmethod

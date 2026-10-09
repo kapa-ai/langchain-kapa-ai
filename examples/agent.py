@@ -70,22 +70,15 @@ def show_documents(message: ToolMessage) -> None:
     if not isinstance(page, KapaDocumentsPage):
         print(f"  {snippet(message.text, 300)}")
         return
-    lengths = {
-        document.document_id: (
+    if not page.documents:
+        print("  (no documents)")
+    for document in page.documents:
+        length = (
             f"{len(document.content):,} chars"
             if document.content is not None
             else "content unavailable"
         )
-        for document in page.documents
-    }
-    for result in page.results:
-        requested = result.requested_url or result.requested_document_id
-        if result.status == "not_found":
-            print(f"  {requested}: not found")
-            continue
-        length = lengths.get(result.document_id or "", "")
-        found = result.matched_url or result.document_id
-        print(f"  {requested}: found {found}, {length}")
+        print(f"  {document.source_url or document.document_id}: {length}")
     if page.has_more:
         print(f"  more requested items on page {page.next_page}")
 

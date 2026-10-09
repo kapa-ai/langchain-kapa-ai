@@ -26,11 +26,10 @@ _DESCRIPTION = (
     "Fetch whole documents from the Kapa knowledge base by source link or document "
     "ID. Use it when a search result is not enough and you need the complete "
     "document. Pass source links exactly as they appear in search results, "
-    "including any part after '#'; Kapa matches each link exactly first, then "
-    "without its fragment. For each requested link or ID, the result says "
-    "whether a document was found and which stored link matched; the documents "
-    "follow. Content can be truncated, and it is null when the document text is "
-    "unavailable. When has_more is true, call again with next_page."
+    "including any part after '#'. Returns the documents found; links and IDs "
+    "that match nothing are omitted. Content can be truncated, and it is null "
+    "when the document text is unavailable. When has_more is true, call again "
+    "with next_page."
 )
 
 
@@ -44,8 +43,7 @@ class KapaGetDocumentsInput(BaseModel):
         default=None,
         description=(
             "Source links of the documents to fetch, exactly as they appear in "
-            "search results. Kapa matches each link exactly first, then without "
-            "its fragment."
+            "search results, including any part after '#'."
         ),
     )
     document_ids: list[UUID] | None = Field(
@@ -84,22 +82,6 @@ class KapaDocument(BaseModel):
     """Whether the content was shortened to the per-document limit."""
 
 
-class KapaDocumentRequestResult(BaseModel):
-    """The outcome of one requested link or document ID."""
-
-    requested_url: str | None = None
-    """Link as requested, when the item is a link."""
-    requested_document_id: str | None = None
-    """Document ID as requested, when the item is an ID."""
-    status: Literal["found", "not_found"]
-    """Whether a document was found."""
-    matched_url: str | None = None
-    """Stored link of the found document, for link requests; it differs from the
-    requested link when Kapa matched the link without its fragment."""
-    document_id: str | None = None
-    """ID of the document found."""
-
-
 class KapaDocumentsPage(BaseModel):
     """One page of a Kapa document lookup."""
 
@@ -113,14 +95,11 @@ class KapaDocumentsPage(BaseModel):
     """Whether another page of requested links or document IDs exists."""
     next_page: int | None
     """Number of the next page; None on the last page."""
-    results: list[KapaDocumentRequestResult]
-    """Outcome of each requested link or ID on this page, in request order."""
     documents: list[KapaDocument]
     """Each document found on this page, once, in request order."""
 
 
 class _DocumentResult(BaseModel):
-    requested_urls: list[str]
     document_id: UUID
     source_url: str | None
     title: str
@@ -181,33 +160,6 @@ def _parse_results(data: Any) -> list[_DocumentResult]:
         raise KapaResponseError(msg) from exc
 
 
-def _index_by_url(
-    requested: list[str], results: list[_DocumentResult]
-) -> dict[str, _DocumentResult]:
-    wanted = set(requested)
-    found: dict[str, _DocumentResult] = {}
-    for result in results:
-        if not result.requested_urls or not wanted.issuperset(result.requested_urls):
-            msg = "Kapa returned a document for a link that was not requested."
-            raise KapaResponseError(msg)
-        for link in result.requested_urls:
-            found[link] = result
-    return found
-
-
-def _index_by_id(
-    requested: list[UUID], results: list[_DocumentResult]
-) -> dict[UUID, _DocumentResult]:
-    wanted = set(requested)
-    found: dict[UUID, _DocumentResult] = {}
-    for result in results:
-        if result.document_id not in wanted:
-            msg = "Kapa returned a document for an ID that was not requested."
-            raise KapaResponseError(msg)
-        found[result.document_id] = result
-    return found
-
-
 def _to_document(result: _DocumentResult) -> KapaDocument:
     return KapaDocument(
         document_id=str(result.document_id),
@@ -220,58 +172,16 @@ def _to_document(result: _DocumentResult) -> KapaDocument:
     )
 
 
-def _assemble(
-    plan: _PagePlan,
-    by_url: dict[str, _DocumentResult],
-    by_id: dict[UUID, _DocumentResult],
-) -> KapaDocumentsPage:
-    results: list[KapaDocumentRequestResult] = []
+def _assemble(plan: _PagePlan, results: list[_DocumentResult]) -> KapaDocumentsPage:
     documents: dict[UUID, KapaDocument] = {}
-
-    def found(result: _DocumentResult) -> str:
+    for result in results:
         documents.setdefault(result.document_id, _to_document(result))
-        return str(result.document_id)
-
-    for link in plan.urls:
-        result = by_url.get(link)
-        if result is None:
-            results.append(
-                KapaDocumentRequestResult(requested_url=link, status="not_found")
-            )
-            continue
-        results.append(
-            KapaDocumentRequestResult(
-                requested_url=link,
-                status="found",
-                matched_url=result.source_url,
-                document_id=found(result),
-            )
-        )
-
-    for document_id in plan.document_ids:
-        id_result = by_id.get(document_id)
-        if id_result is None:
-            results.append(
-                KapaDocumentRequestResult(
-                    requested_document_id=str(document_id), status="not_found"
-                )
-            )
-            continue
-        results.append(
-            KapaDocumentRequestResult(
-                requested_document_id=str(document_id),
-                status="found",
-                document_id=found(id_result),
-            )
-        )
-
     return KapaDocumentsPage(
         page=plan.page,
         page_size=plan.page_size,
         total_requested=plan.total_requested,
         has_more=plan.has_more,
         next_page=plan.page + 1 if plan.has_more else None,
-        results=results,
         documents=list(documents.values()),
     )
 
@@ -299,10 +209,8 @@ class KapaDocumentSettings(BaseModel):
 class KapaGetDocumentsTool(KapaSettings, KapaDocumentSettings, BaseTool):
     """Fetch whole documents from a Kapa knowledge base by link or document ID.
 
-    Kapa matches each link exactly first, then without its fragment, and each
-    result reports the stored link that matched. A page covers `page_size`
-    distinct requested links and document IDs, so it returns at most that many
-    documents.
+    A page covers `page_size` distinct requested links and document IDs, so it
+    returns at most that many documents.
     """
 
     name: str = "kapa_get_documents"
@@ -326,42 +234,23 @@ class KapaGetDocumentsTool(KapaSettings, KapaDocumentSettings, BaseTool):
             body["max_chars_per_document"] = self.max_chars_per_document
         return body
 
-    def _fetch_urls(
-        self, session: KapaSession, urls: list[str]
-    ) -> dict[str, _DocumentResult]:
-        found: dict[str, _DocumentResult] = {}
-        for batch in _batches(urls):
-            data = session.post("documents", self._request_body("urls", batch))
-            found.update(_index_by_url(batch, _parse_results(data)))
-        return found
+    def _fetch(
+        self, session: KapaSession, key: str, values: list[Any]
+    ) -> list[_DocumentResult]:
+        results: list[_DocumentResult] = []
+        for batch in _batches(values):
+            data = session.post("documents", self._request_body(key, batch))
+            results.extend(_parse_results(data))
+        return results
 
-    def _fetch_ids(
-        self, session: KapaSession, document_ids: list[UUID]
-    ) -> dict[UUID, _DocumentResult]:
-        found: dict[UUID, _DocumentResult] = {}
-        for batch in _batches(document_ids):
-            data = session.post("documents", self._request_body("document_ids", batch))
-            found.update(_index_by_id(batch, _parse_results(data)))
-        return found
-
-    async def _afetch_urls(
-        self, session: KapaAsyncSession, urls: list[str]
-    ) -> dict[str, _DocumentResult]:
-        found: dict[str, _DocumentResult] = {}
-        for batch in _batches(urls):
-            data = await session.post("documents", self._request_body("urls", batch))
-            found.update(_index_by_url(batch, _parse_results(data)))
-        return found
-
-    async def _afetch_ids(
-        self, session: KapaAsyncSession, document_ids: list[UUID]
-    ) -> dict[UUID, _DocumentResult]:
-        found: dict[UUID, _DocumentResult] = {}
-        for batch in _batches(document_ids):
-            body = self._request_body("document_ids", batch)
-            data = await session.post("documents", body)
-            found.update(_index_by_id(batch, _parse_results(data)))
-        return found
+    async def _afetch(
+        self, session: KapaAsyncSession, key: str, values: list[Any]
+    ) -> list[_DocumentResult]:
+        results: list[_DocumentResult] = []
+        for batch in _batches(values):
+            data = await session.post("documents", self._request_body(key, batch))
+            results.extend(_parse_results(data))
+        return results
 
     def _run(
         self,
@@ -372,10 +261,12 @@ class KapaGetDocumentsTool(KapaSettings, KapaDocumentSettings, BaseTool):
     ) -> tuple[str, KapaDocumentsPage]:
         plan = _plan_page(urls, document_ids, page, self.page_size)
         with self._kapa_client().session() as session:
-            by_url = self._fetch_urls(session, plan.urls)
-            by_id = self._fetch_ids(session, plan.document_ids)
-        result = _assemble(plan, by_url, by_id)
-        return result.model_dump_json(), result
+            results = [
+                *self._fetch(session, "urls", plan.urls),
+                *self._fetch(session, "document_ids", plan.document_ids),
+            ]
+        found = _assemble(plan, results)
+        return found.model_dump_json(), found
 
     async def _arun(
         self,
@@ -386,7 +277,9 @@ class KapaGetDocumentsTool(KapaSettings, KapaDocumentSettings, BaseTool):
     ) -> tuple[str, KapaDocumentsPage]:
         plan = _plan_page(urls, document_ids, page, self.page_size)
         async with self._kapa_client().async_session() as session:
-            by_url = await self._afetch_urls(session, plan.urls)
-            by_id = await self._afetch_ids(session, plan.document_ids)
-        result = _assemble(plan, by_url, by_id)
-        return result.model_dump_json(), result
+            results = [
+                *await self._afetch(session, "urls", plan.urls),
+                *await self._afetch(session, "document_ids", plan.document_ids),
+            ]
+        found = _assemble(plan, results)
+        return found.model_dump_json(), found
