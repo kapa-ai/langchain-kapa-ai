@@ -2,6 +2,10 @@
 
 All notable changes to this package are documented here. Versions follow [semantic versioning](https://semver.org).
 
+## 0.1.1
+
+- Rewrite the README: explain what Kapa is, add requirements, credentials, an agent example, retrieval modes, and errors and retries, and link to the reference documentation.
+
 ## 0.1.0
 
 - `KapaRetriever`: synchronous and asynchronous retrieval from a Kapa project in the `default` or `deep` mode, with result limits, source group filters, and analytics options. Each document keeps its citation link in `metadata["source"]`.
