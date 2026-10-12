@@ -3,11 +3,24 @@
 [![PyPI - Version](https://img.shields.io/pypi/v/langchain-kapa-ai?label=%20)](https://pypi.org/project/langchain-kapa-ai/#history)
 [![PyPI - Downloads](https://static.pepy.tech/badge/langchain-kapa-ai/month)](https://pepy.tech/project/langchain-kapa-ai)
 
-LangChain integration for [Kapa.ai](https://www.kapa.ai). It provides a retriever, a document tool, and a toolkit that returns both as agent tools, so Python LangChain applications and agents can search a Kapa knowledge base and look up whole documents for the sources a search returns.
+LangChain integration for [Kapa](https://docs.kapa.ai). Kapa is an ingestion and retrieval system: it indexes content such as documentation sites, wikis, PDFs, tickets, Slack threads, and API specifications into a knowledge base, keeps it up to date, and lets your agents get context from it through [agentic retrieval](https://docs.kapa.ai/retrieval/).
 
-- `KapaRetriever` returns the most relevant chunks for a query as LangChain documents, each with its source link in `metadata["source"]`.
-- `KapaGetDocumentsTool` lets an agent fetch whole documents by the source links that search results cite, or by document ID.
-- `KapaToolkit` returns both as agent tools, configured from one set of settings.
+This package gives Python LangChain chains and agents access to Kapa's retrieval over the knowledge sources in your Kapa project.
+
+- `KapaRetriever`: a retriever that returns the most relevant chunks for a query as LangChain documents.
+- `KapaGetDocumentsTool`: an agent tool that fetches whole documents by source URL or document ID.
+- `KapaToolkit`: returns search and document lookup as two agent tools, `search_knowledge_sources` and `get_knowledge_documents`, configured from one set of settings.
+
+## Documentation
+
+- [Reference](https://docs.kapa.ai/retrieval/frameworks/langchain): every setting, the result formats, and the errors.
+- [Add knowledge base search to a LangChain agent](https://docs.kapa.ai/examples/langchain-knowledge-base-search): a full walkthrough, from creating an API key to a running agent.
+
+## Requirements
+
+- Python 3.10 or later.
+- `langchain-core` 1.4 or later, before 2.0.
+- A Kapa project with indexed knowledge sources. To set one up, follow [Set up with a coding agent](https://docs.kapa.ai/getting-started/set-up-with-a-coding-agent).
 
 ## Installation
 
@@ -15,14 +28,45 @@ LangChain integration for [Kapa.ai](https://www.kapa.ai). It provides a retrieve
 pip install langchain-kapa-ai
 ```
 
-## Usage
+## Credentials
 
-The package searches a Kapa project that already has knowledge sources indexed; [Index your first source](https://docs.kapa.ai/getting-started/index-your-first-source) sets one up. Create an API key for that project in the [Kapa platform](https://app.kapa.ai), then set it and the project ID:
+In the [Kapa platform](https://app.kapa.ai), create an API key for your project under **Deploy** > **API Keys**, and copy the project ID from **Settings** > **Projects**. All components read both from the environment, so export them:
 
 ```bash
 export KAPA_API_KEY="your-api-key"
 export KAPA_PROJECT_ID="your-project-id"
 ```
+
+Or put them in a `.env` file. The package does not read the file itself, so load it in your application, for example with [`python-dotenv`](https://pypi.org/project/python-dotenv/):
+
+```bash
+KAPA_API_KEY=your-api-key
+KAPA_PROJECT_ID=your-project-id
+```
+
+## Usage
+
+### Use in an agent
+
+`KapaToolkit` gives an agent both tools. This example also needs `langchain` and your model provider's LangChain package. Replace `<provider>:<model>` with a tool-capable model and configure the provider's credentials.
+
+```python
+from langchain.agents import create_agent
+from langchain.chat_models import init_chat_model
+from langchain_kapa_ai import KapaToolkit
+
+agent = create_agent(
+    init_chat_model("<provider>:<model>"),
+    tools=KapaToolkit().get_tools(),
+    system_prompt="Search the knowledge base before answering and cite your sources.",
+)
+```
+
+`search_knowledge_sources` returns each chunk with its source link, and `get_knowledge_documents` fetches the whole document behind a link when a chunk is not enough.
+
+### Search without an agent
+
+`KapaRetriever` works anywhere LangChain accepts a retriever, including chains. It supports `invoke`, `ainvoke`, `batch`, and `abatch`:
 
 ```python
 from langchain_kapa_ai import KapaRetriever
@@ -33,6 +77,19 @@ for document in retriever.invoke("How do I rotate an API key?"):
     print(document.page_content)
 ```
 
+#### Retrieval mode
+
+The retriever has two modes. `default` is faster. `deep` searches further and returns only relevant chunks, at the cost of latency. Set the mode on the retriever, or for a single call:
+
+```python
+retriever = KapaRetriever(mode="deep")
+documents = retriever.invoke("How do I rotate an API key?", mode="default")
+```
+
+[Choose a retrieval mode](https://docs.kapa.ai/retrieval/guides/tuning-knowledge-base-search) helps you pick one. `KapaToolkit` takes the same setting, for example `KapaToolkit(mode="deep")`. The [reference](https://docs.kapa.ai/retrieval/frameworks/langchain) lists every other setting, such as `top_k`, `source_group_ids`, and analytics attribution.
+
+### Fetch whole documents
+
 `KapaGetDocumentsTool` fetches whole documents by the source links that search results cite:
 
 ```python
@@ -42,59 +99,13 @@ tool = KapaGetDocumentsTool()
 print(tool.invoke({"urls": ["https://docs.example.com/guide"]}))
 ```
 
-The retriever also works in a chain. This one passes the chunks and their source links to a chat model named in LangChain's `provider:model` form:
+### Errors and retries
 
-```python
-import os
-
-from langchain.chat_models import init_chat_model
-from langchain_core.documents import Document
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnablePassthrough
-
-from langchain_kapa_ai import KapaRetriever
-
-
-def format_documents(documents: list[Document]) -> str:
-    return "\n\n".join(
-        f"Source: {document.metadata['source']}\n{document.page_content}"
-        for document in documents
-    )
-
-
-prompt = ChatPromptTemplate.from_template(
-    "Answer from the chunks and cite their sources.\n\n"
-    "Chunks:\n{context}\n\nQuestion: {question}"
-)
-chain = (
-    {"context": KapaRetriever() | format_documents, "question": RunnablePassthrough()}
-    | prompt
-    | init_chat_model(os.environ["KAPA_EXAMPLE_MODEL"])
-    | StrOutputParser()
-)
-print(chain.invoke("How do I rotate an API key?"))
-```
-
-`KapaToolkit` gives an agent both tools, a search tool that shows each chunk with its source link and the document tool, from one set of settings:
-
-```python
-from langchain_kapa_ai import KapaToolkit
-
-tools = KapaToolkit().get_tools()
-```
-
-The [agent example](https://docs.kapa.ai/examples/langchain-knowledge-base-search) attaches the toolkit to an agent, and the [reference](https://docs.kapa.ai/retrieval/frameworks/langchain) describes every setting, the document tool, and the errors.
+A failed request raises an exception that derives from `KapaError`; it never becomes an empty result. No component retries a failed request: in a chain, wrap a component with LangChain's `with_retry()`, and in an agent, use LangChain's `ToolRetryMiddleware`. The [reference](https://docs.kapa.ai/retrieval/frameworks/langchain#errors) lists every exception.
 
 ## Examples
 
-- [`examples/`](examples/): search without a model, a fixed question-to-answer pipeline, and an agent that searches and follows citations into whole documents.
-
-The examples work with any chat model that supports tool calling, for example from OpenAI or Anthropic. Install that provider's LangChain package, set its API key, and name the model in LangChain's `provider:model` form:
-
-```bash
-export KAPA_EXAMPLE_MODEL="<provider>:<model>"
-```
+See [`examples/`](examples/) for full code examples.
 
 ## Development
 
